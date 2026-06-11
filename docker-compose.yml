@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+
+  planificacion:
+
+    build: .
+
+    container_name: planificacion_rrhh
+
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+
+      # =====================================
+      # FRONTEND
+      # =====================================
+
+      - ./frontend:/app/frontend
+
+      # =====================================
+      # SQLITE
+      # =====================================
+
+      - ./data:/app/data
+
+    environment:
+      - TZ=America/Santiago
+      # Contraseña de administrador (cámbiala en producción).
+      - ADMIN_PASSWORD=casino2026
+      # Orígenes CORS permitidos (separados por coma). Vacío = mismo origen.
+      # - ALLOWED_ORIGINS=https://tu-dominio.cl

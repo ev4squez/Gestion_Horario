@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(/tmp/gh_venv/bin/pip install *)",
+      "Bash(node --check frontend/js/app.js)",
+      "Bash(node --check frontend/js/admin/auth.js)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('backend/app.py'\\).read\\(\\)\\); print\\('app.py sintaxis OK'\\)\")",
+      "Bash(node --check frontend/js/api.js)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/)",
+      "Bash(curl -s -o /tmp/resp.txt -w 'HTTP %{http_code}\\\\n' -X POST http://localhost:8000/planificacion -H 'Content-Type: application/json' -d '{\"trabajador_id\":999999,\"responsable\":\"VERIFY\",\"fecha\":\"2099-01-01\",\"turno\":\"Libre\",\"horas\":0}')",
+      "Read(//tmp/**)",
+      "Bash(curl -s \"http://localhost:8000/planificacion\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('registros 2099-01-01:', [r for r in d if r['fecha']=='2099-01-01']\\)\")",
+      "Bash(npm i *)",
+      "Bash(rm -f /tmp/rp_*.png /tmp/v_*.png /tmp/full_*.png /tmp/panel_*.png /tmp/shot.js /tmp/panel.js /tmp/fullshot.js)",
+      "Bash(rm -rf /tmp/node_modules /tmp/package*.json)",
+      "Bash(node --check frontend/js/resumen.js)",
+      "Bash(rm -f /tmp/dom_*.png /tmp/dom.js)"
+    ]
+  }
+}

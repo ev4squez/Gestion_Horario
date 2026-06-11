@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Turnos</title>
+
+  <!-- TAILWIND -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- FLOWBITE -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+
+  <!-- ICONOS -->
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+  <!-- FUENTES: Bricolage Grotesque (display) + Plus Jakarta Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+
+  <style>
+    /* ── TOKENS ─────────────────────────────── */
+    :root {
+      --sidebar-bg-top: #0c1228;
+      --sidebar-bg-mid: #101830;
+      --sidebar-bg-bot: #0c1228;
+      --accent: #3b6ef8;
+      --accent-light: #eef2ff;
+      --accent-glow: rgba(59, 110, 248, 0.35);
+      --surface: #ffffff;
+      --bg: #f0f4fb;
+      --border: #e4e9f2;
+      --text-primary: #0f172a;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius-xl: 28px;
+      --radius-pill: 999px;
+      --shadow-card: 0 4px 24px rgba(15, 23, 42, 0.07);
+      --shadow-elevated: 0 12px 40px rgba(15, 23, 42, 0.12);
+    }
+
+    /* ── BASE ────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      overflow-x: hidden;
+    }
+
+    /* ── SCROLLBAR ───────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #c1cad8;
+      border-radius: var(--radius-pill);
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* ── SIDEBAR ─────────────────────────────── */
+    #sidebar {
+      background: linear-gradient(170deg,
+          var(--sidebar-bg-top) 0%,
+          var(--sidebar-bg-mid) 50%,
+          var(--sidebar-bg-bot) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* decorative glow blob in sidebar */
+    #sidebar::before {
+      content: "";
+      position: absolute;
+      top: -80px;
+      left: -60px;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle,
+          rgba(59, 110, 248, 0.18) 0%,
+          transparent 70%);
+      pointer-events: none;
+    }
+
+    #sidebar::after {
+      content: "";
+      position: absolute;
+      bottom: 40px;
+      right: -80px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle,
+          rgba(59, 110, 248, 0.12) 0%,
+          transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── LOGO ICON ───────────────────────────── */
+    .logo-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(59, 110, 248, 0.5);
+      flex-shrink: 0;
+    }
+
+    /* ── NAV ITEM ────────────────────────────── */
+    .menu-item {
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      border-radius: 16px;
+    }
+
+    .menu-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      transform: translateX(3px);
+    }
+
+    .menu-item.active {
+      background: linear-gradient(90deg,
+          rgba(59, 110, 248, 0.9) 0%,
+          rgba(100, 144, 251, 0.8) 100%);
+      box-shadow: 0 6px 20px var(--accent-glow);
+    }
+
+    .menu-item.active::before {
+      content: "";
+      position: absolute;
+      left: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 60%;
+      background: white;
+      border-radius: var(--radius-pill);
+    }
+
+    /* ── GLASS HEADER ────────────────────────── */
+    .header-glass {
+      background: rgba(240, 244, 251, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(228, 233, 242, 0.8);
+    }
+
+    /* ── CARD ────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 0.25s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-elevated);
+    }
+
+    /* ── ICON BOX ─────────────────────────────── */
+    .icon-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ── SELECT ──────────────────────────────── */
+    .filter-select {
+      appearance: none;
+      background: white;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 18px 10px 46px;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      cursor: pointer;
+      outline: none;
+      transition:
+        border-color 0.2s,
+        box-shadow 0.2s;
+    }
+
+    .filter-select:hover {
+      border-color: #a8b8e8;
+    }
+
+    .filter-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(59, 110, 248, 0.12);
+    }
+
+    /* ── BADGE ───────────────────────────────── */
+    .badge-active {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+      color: #3b6ef8;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-active::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #3b6ef8;
+      box-shadow: 0 0 0 3px rgba(59, 110, 248, 0.25);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 3px rgba(59, 110, 248, 0.25);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(59, 110, 248, 0.08);
+      }
+    }
+
+    /* ── STAT CARD ───────────────────────────── */
+    .stat-card {
+      border-radius: 24px;
+      padding: 24px;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: "";
+      position: absolute;
+      top: -30px;
+      right: -30px;
+      width: 110px;
+      height: 110px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+    }
+
+    .stat-card::after {
+      content: "";
+      position: absolute;
+      bottom: -40px;
+      right: 30px;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 50%;
+    }
+
+    /* ── ACTION BTN ──────────────────────────── */
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 14px;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-size: 0.875rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .action-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .action-btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-pdf {
+      background: linear-gradient(135deg, #ef4444, #f87171);
+      color: white;
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-pdf:hover {
+      box-shadow: 0 10px 28px rgba(239, 68, 68, 0.4);
+    }
+
+    .btn-excel {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      color: white;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-excel:hover {
+      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.4);
+    }
+
+    /* ── ICON TOGGLE BTN ─────────────────────── */
+    .toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: white;
+      border: 1.5px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+      transition: all 0.2s;
+    }
+
+    .toggle-btn:hover {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── TYPOGRAPHY ──────────────────────────── */
+    .display-title {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .section-title {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    /* ── PANEL & CONTENT TRANSITIONS ─────────── */
+    #right-panel,
+    #main-content {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── SIDEBAR LOGO ANIMATE ─────────────────── */
+    @keyframes fadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #sidebar nav .menu-item {
+      animation: fadeSlideIn 0.35s ease both;
+    }
+
+    #sidebar nav .menu-item:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    #sidebar nav .menu-item:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    #sidebar nav .menu-item:nth-child(3) {
+      animation-delay: 0.15s;
+    }
+
+    #sidebar nav .menu-item:nth-child(4) {
+      animation-delay: 0.2s;
+    }
+
+    /* ── SECTION DIVIDER ─────────────────────── */
+    .nav-divider {
+      margin: 8px 12px;
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    /* ── RESUMEN DOMINGOS ────────────────────── */
+    #resumen-domingos {
+      background: #fafbfe;
+    }
+
+    /* ── STAT NUMBER ─────────────────────────── */
+    .stat-number {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-weight: 800;
+      font-size: 2.8rem;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="flex flex-col xl:flex-row min-h-screen xl:h-screen xl:overflow-hidden">
+    <!-- ══════════════════════════════════════ -->
+    <!-- SIDEBAR                               -->
+    <!-- ══════════════════════════════════════ -->
+    <aside id="sidebar"
+      class="w-full xl:w-72 text-white flex flex-col border-r border-white/5 shadow-2xl transition-all duration-300 xl:h-screen xl:overflow-y-auto">
+      <!-- LOGO / BRAND -->
+      <div class="px-5 xl:px-7 py-6 border-b border-white/8">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="sidebar-text">
+              <h1 class="display-title text-white" style="font-size: 1.6rem">
+                Turnos
+              </h1>
+              <p class="text-slate-400 text-xs mt-0.5 font-medium tracking-wide uppercase">
+                Sistema Operacional
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NAV LABEL -->
+      <div class="sidebar-text px-7 pt-6 pb-2">
+        <p class="text-slate-500 text-xs font-700 uppercase tracking-widest">
+          Navegación
+        </p>
+      </div>
+
+      <!-- MENU -->
+      <nav class="flex xl:flex-col overflow-x-auto xl:overflow-visible gap-2 px-4 xl:px-4 pb-4">
+        <button class="menu-item active flex items-center gap-3 px-4 py-3 text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">calendar_month</span>
+          <span class="font-600 sidebar-text">Planificación</span>
+        </button>
+
+        <button onclick="accederCRUD()"
+          class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">groups</span>
+          <span class="font-500 sidebar-text">Colaboradores</span>
+        </button>
+
+        <hr class="nav-divider sidebar-text" />
+
+        <button class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">analytics</span>
+          <span class="font-500 sidebar-text">Reportes</span>
+        </button>
+
+        <button class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl" style="color: #fbbf24">warning</span>
+          <span class="font-500 sidebar-text">Alertas</span>
+        </button>
+      </nav>
+
+      <!-- SIDEBAR FOOTER -->
+      <div class="mt-auto p-5 border-t border-white/6 sidebar-text">
+        <div class="flex items-center gap-3 px-2 py-3 rounded-2xl hover:bg-white/5 transition cursor-pointer">
+          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-slate-300 text-lg">settings</span>
+          </div>
+          <span class="text-slate-400 text-sm font-500">Configuración</span>
+        </div>
+
+        <!-- CERRAR SESIÓN (solo con sesión activa) -->
+        <button id="btn-logout" onclick="cerrarSesionAdmin()"
+          class="hidden w-full mt-2 flex items-center gap-3 px-2 py-3 rounded-2xl hover:bg-white/5 transition text-left">
+          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-red-400 text-lg">logout</span>
+          </div>
+          <span class="text-red-400 text-sm font-500">Cerrar sesión</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- MAIN                                  -->
+    <!-- ══════════════════════════════════════ -->
+    <main class="flex-1 min-w-0 xl:overflow-hidden flex flex-col">
+      <!-- ── HEADER ──────────────────────── -->
+      <header class="header-glass sticky top-0 z-50">
+        <div class="px-4 md:px-6 xl:px-8 py-4 flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4">
+          <!-- TÍTULO -->
+          <div class="flex items-center gap-3">
+            <!-- Toggle sidebar -->
+            <button onclick="toggleSidebar()" class="toggle-btn hidden xl:inline-flex">
+              <span class="material-symbols-outlined text-xl">left_panel_close</span>
+            </button>
+
+            <!-- Toggle right panel -->
+            <button onclick="toggleRightPanel()" class="toggle-btn hidden xl:inline-flex">
+              <span class="material-symbols-outlined text-xl">right_panel_close</span>
+            </button>
+
+            <!-- Divider -->
+            <div class="hidden xl:block w-px h-8 bg-slate-200 mx-1"></div>
+
+            <div>
+              <h2 class="display-title text-xl md:text-2xl xl:text-3xl">
+                Gestión de Turnos
+              </h2>
+              <p class="text-slate-500 text-xs md:text-sm font-500 mt-0.5">
+                Planificación mensual y control operativo
+              </p>
+            </div>
+          </div>
+
+          <!-- FILTROS & ACCIONES -->
+          <div class="flex flex-wrap items-center gap-3 w-full 2xl:w-auto">
+            <!-- MES -->
+            <div class="relative w-full sm:w-auto">
+              <span
+                class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">
+                calendar_today
+              </span>
+              <select id="mes-selector" class="filter-select w-full sm:w-auto pr-4"
+                onchange="actualizarVista()"></select>
+            </div>
+
+            <!-- AÑO -->
+            <div class="relative w-full sm:w-auto">
+              <span
+                class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">
+                event
+              </span>
+              <select id="anio-selector" class="filter-select w-full sm:w-auto pr-4"
+                onchange="actualizarVista()"></select>
+            </div>
+
+            <!-- RESPONSABLE -->
+            <div class="relative w-full sm:w-auto">
+              <span
+                class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">
+                manage_accounts
+              </span>
+              <select id="filtro-responsable" class="filter-select w-full sm:w-auto min-w-[260px] pr-4"
+                onchange="filtrarResponsable()">
+                <option value="todos">Todos los responsables</option>
+              </select>
+            </div>
+
+            <!-- Divider vertical -->
+            <div class="hidden sm:block w-px h-8 bg-slate-200"></div>
+
+            <!-- PDF -->
+            <button class="action-btn btn-pdf w-full sm:w-auto justify-center" onclick="exportarPDF()">
+              <span class="material-symbols-outlined text-xl">picture_as_pdf</span>
+              PDF
+            </button>
+
+            <!-- EXCEL -->
+            <button class="action-btn btn-excel w-full sm:w-auto justify-center">
+              <span class="material-symbols-outlined text-xl">table_view</span>
+              Excel
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── CONTENT ──────────────────────── -->
+      <div class="p-4 md:p-6 xl:p-8 flex-1 xl:overflow-hidden">
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:h-full">
+          <!-- MAIN PANEL -->
+          <div id="main-content" class="xl:col-span-9 xl:overflow-auto min-w-0 transition-all duration-300">
+            <!-- ===================================== -->
+            <!-- VISTA PLANIFICACIÓN -->
+            <!-- ===================================== -->
+
+            <div id="vista-planificacion" class="card p-6 md:p-8 min-h-full">
+              <!-- PANEL HEADER -->
+              <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
+                <div>
+                  <h3 class="section-title text-2xl">
+                    Planificación General
+                  </h3>
+
+                  <p class="text-slate-400 text-sm font-500 mt-1.5">
+                    Visualización y administración de turnos del equipo.
+                  </p>
+                </div>
+
+                <div class="badge-active flex-shrink-0">Dashboard Activo</div>
+              </div>
+
+              <!-- CONTENEDOR RESPONSABLES -->
+              <div id="contenedor-responsables" class="space-y-8"></div>
+            </div>
+
+            <!-- ===================================== -->
+            <!-- VISTA TRABAJADORES -->
+            <!-- ===================================== -->
+
+            <div id="vista-trabajadores" class="hidden mt-6">
+              <div class="card p-6 md:p-8">
+                <!-- HEADER -->
+                <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                  <div>
+                    <h2 class="text-3xl font-black text-slate-800">
+                      Administración Trabajadores
+                    </h2>
+
+                    <p class="text-slate-500 mt-2">
+                      Gestión de colaboradores del sistema
+                    </p>
+                  </div>
+
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <!-- VOLVER -->
+                    <button onclick="volverPlanificacion()"
+                      class="px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">
+                        arrow_back
+                      </span>
+
+                      Volver
+                    </button>
+
+                    <!-- NUEVO -->
+                    <button onclick="nuevoTrabajador()"
+                      class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">
+                        add
+                      </span>Nuevo Trabajador
+                    </button>
+
+                  </div>
+                </div>
+
+                <!-- FILTROS -->
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+                  <!-- AREA -->
+                  <div>
+                    <select onchange="aplicarFiltrosTrabajadores()" id="filtro-area"
+                      class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="">Todas las áreas</option>
+                    </select>
+                  </div>
+
+                  <!-- CECO -->
+                  <div>
+                    <select onchange="aplicarFiltrosTrabajadores()" id="filtro-ceco"
+                      class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="">Todos los CECO</option>
+                    </select>
+                  </div>
+
+                  <!-- LIMPIAR -->
+                  <div>
+                    <button onclick="limpiarFiltrosTrabajadores()"
+                      class="w-full px-4 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition">
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- TABLA -->
+                <div class="overflow-auto rounded-2xl border border-slate-200">
+                  <table class="w-full text-sm">
+                    <thead class="bg-slate-100 text-slate-700">
+                      <tr>
+                        <th class="p-4 text-left">Nombre</th>
+                        <th class="p-4 text-left">Responsable</th>
+                        <th class="p-4 text-left">Área</th>
+                        <th class="p-4 text-left">CECO</th>
+                        <th class="p-4 text-center">Estado</th>
+                        <th class="p-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+
+                    <tbody id="tabla-trabajadores-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT PANEL -->
+          <div id="right-panel"
+            class="xl:col-span-3 min-w-0 transition-all duration-300 grid grid-cols-1 sm:grid-cols-2 xl:flex xl:flex-col gap-5 content-start xl:h-full xl:overflow-hidden">
+            <!-- HORAS STAT -->
+            <div class="stat-card xl:flex-none" style="
+                  background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
+                  box-shadow: 0 10px 36px rgba(59, 110, 248, 0.35);
+                ">
+              <div class="relative z-10 flex items-center justify-between">
+                <div>
+                  <p class="text-blue-100/80 text-xs font-700 uppercase tracking-widest mb-2">
+                    Horas Totales
+                  </p>
+                  <h3 id="total-horas" class="stat-number">0</h3>
+                </div>
+                <span class="material-symbols-outlined text-white/30" style="font-size: 56px">timer</span>
+              </div>
+            </div>
+
+            <!-- TRABAJADORES STAT -->
+            <div class="stat-card xl:flex-none" style="
+                  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+                  box-shadow: 0 10px 36px rgba(16, 185, 129, 0.3);
+                ">
+              <div class="relative z-10 flex items-center justify-between">
+                <div>
+                  <p class="text-emerald-100/80 text-xs font-700 uppercase tracking-widest mb-2">
+                    Trabajadores
+                  </p>
+                  <h3 id="total-trabajadores" class="stat-number">0</h3>
+                </div>
+                <span class="material-symbols-outlined text-white/30" style="font-size: 56px">groups</span>
+              </div>
+            </div>
+
+            <!-- ALERTAS CARD -->
+            <div id="card-alertas" class="card overflow-hidden xl:flex xl:flex-col xl:flex-1 xl:min-h-0">
+              <!-- HEADER -->
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                <!-- TITULO -->
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-amber-500 text-xl">warning</span>
+                  </div>
+                  <div class="min-w-0">
+                    <h2 class="section-title text-lg">Alertas</h2>
+                    <p class="text-slate-400 text-xs font-500 mt-0.5 truncate">
+                      Conflictos de descanso
+                    </p>
+                  </div>
+                </div>
+                <!-- BADGE -->
+                <span id="badge-alertas"
+                  class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold whitespace-nowrap"></span>
+              </div>
+
+              <!-- CONTENIDO -->
+              <div id="contenedor-alertas"
+                class="p-3 bg-slate-50 space-y-2 overflow-y-auto max-h-[350px] md:max-h-[450px] xl:max-h-none xl:flex-1 xl:min-h-0">
+              </div>
+            </div>
+
+            <!-- DOMINGOS CARD -->
+            <div id="card-domingos" class="card overflow-hidden xl:flex xl:flex-col xl:flex-1 xl:min-h-0">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3 shrink-0">
+                <div class="icon-box w-10 h-10" style="background: #fef9ee">
+                  <span class="material-symbols-outlined text-xl" style="color: #f59e0b">calendar_month</span>
+                </div>
+                <div>
+                  <h2 class="section-title text-lg">Domingos</h2>
+                  <p class="text-slate-400 text-xs font-500 mt-0.5">
+                    Resumen de turnos y días libres
+                  </p>
+                </div>
+              </div>
+              <div id="resumen-domingos"
+                class="p-3 space-y-2 overflow-auto max-h-[480px] xl:max-h-none xl:flex-1 xl:min-h-0"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- TURNOS DATALIST (sin cambios) -->
+  <datalist id="turnos">
+    <option value="09:00 - 18:30"></option>
+    <option value="09:00 - 17:30"></option>
+    <option value="16:30 - 03:00"></option>
+    <option value="17:30 - 04:00"></option>
+    <option value="18:30 - 05:00"></option>
+    <option value="19:30 - 06:00"></option>
+    <option value="Libre"></option>
+    <option value="Saliente"></option>
+  </datalist>
+
+  <!-- JS (sin cambios) -->
+  <script src="js/api.js"></script>
+  <script src="js/calendario.js"></script>
+  <script src="js/resumen.js"></script>
+  <script src="js/app.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
+  <script src="js/pdf.js"></script>
+
+  <script src="js/admin/auth.js"></script>
+  <script src="js/admin/modal.js"></script>
+  <script src="js/admin/trabajadores.js"></script>
+  <script src="js/admin/crud.js"></script>
+
+  <!-- SCRIPTS (sin cambios en lógica) -->
+  <script>
+    let sidebarCollapsed = false;
+    let rightPanelCollapsed = false;
+
+    // SIDEBAR IZQUIERDO
+    function toggleSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      const texts = document.querySelectorAll(".sidebar-text");
+
+      if (!sidebarCollapsed) {
+        sidebar.classList.remove("xl:w-72");
+        sidebar.classList.add("xl:w-20");
+        texts.forEach((t) => t.classList.add("hidden"));
+      } else {
+        sidebar.classList.remove("xl:w-20");
+        sidebar.classList.add("xl:w-72");
+        texts.forEach((t) => t.classList.remove("hidden"));
+      }
+
+      sidebarCollapsed = !sidebarCollapsed;
+    }
+
+    // PANEL DERECHO
+    function toggleRightPanel() {
+      const panel = document.getElementById("right-panel");
+      const main = document.getElementById("main-content");
+
+      if (!rightPanelCollapsed) {
+        panel.classList.add("hidden");
+        main.classList.remove("xl:col-span-9");
+        main.classList.add("xl:col-span-12");
+      } else {
+        panel.classList.remove("hidden");
+        main.classList.remove("xl:col-span-12");
+        main.classList.add("xl:col-span-9");
+      }
+
+      rightPanelCollapsed = !rightPanelCollapsed;
+    }
+
+    let adminAutorizado = !!localStorage.getItem("authToken");
+  </script>
+
+  <!-- ===================================== -->
+  <!-- MODAL LOGIN -->
+  <!-- ===================================== -->
+
+  <div id="modal-login-admin"
+    class="hidden fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+      <div class="text-center mb-8">
+        <div class="w-20 h-20 rounded-3xl bg-blue-100 flex items-center justify-center mx-auto mb-5">
+          <span class="material-symbols-outlined text-5xl text-blue-600">
+            lock
+          </span>
+        </div>
+
+        <h2 class="text-3xl font-black text-slate-800">Acceso Admin</h2>
+
+        <p class="text-slate-500 mt-2">Ingrese contraseña administrador</p>
+      </div>
+
+      <input type="password" id="password-admin" placeholder="Contraseña"
+        class="w-full rounded-2xl border border-slate-300 px-5 py-4 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
+
+      <button onclick="validarAdmin()"
+        class="w-full mt-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white py-4 font-bold transition">
+        Entrar
+      </button>
+
+      <button onclick="cerrarModalAdmin()"
+        class="w-full mt-3 rounded-2xl border border-slate-300 py-4 font-semibold text-slate-600">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL TRABAJADOR -->
+  <!-- ===================================== -->
+
+  <div id="modal-trabajador"
+    class="hidden fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden">
+      <!-- HEADER -->
+      <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h2 id="titulo-modal-trabajador" class="text-3xl font-black text-slate-800">
+            Nuevo Trabajador
+          </h2>
+
+          <p class="text-slate-500 mt-2">Administración de colaboradores</p>
+        </div>
+
+        <button onclick="cerrarModalTrabajador()"
+          class="w-12 h-12 rounded-2xl hover:bg-slate-100 flex items-center justify-center transition">
+          <span class="material-symbols-outlined text-slate-500">
+            close
+          </span>
+        </button>
+      </div>
+
+      <!-- BODY -->
+      <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- ID -->
+        <input type="hidden" id="trabajador-id" />
+
+        <!-- RUT -->
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            RUT
+          </label>
+
+          <input type="text" id="trabajador-rut" placeholder="12.345.678-9"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+
+        <!-- JORNADA -->
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Jornada
+          </label>
+
+          <select id="trabajador-jornada"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+            <option value="42">42 Horas</option>
+
+            <option value="30">30 Horas</option>
+
+            <option value="20">20 Horas</option>
+          </select>
+        </div>
+
+        <!-- NOMBRE -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Nombre Completo
+          </label>
+
+          <input type="text" id="trabajador-nombre" placeholder="Nombre trabajador"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+        <!-- RESPONSABLE -->
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Responsable
+          </label>
+
+          <select id="trabajador-responsable" onchange="alternarCampoNuevo('responsable')"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"></select>
+
+          <input type="text" id="trabajador-responsable-nuevo" placeholder="Nombre del nuevo responsable"
+            class="hidden mt-2 w-full rounded-2xl border border-blue-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+
+        <!-- AREA -->
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Área
+          </label>
+
+          <select id="trabajador-area" onchange="alternarCampoNuevo('area')"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"></select>
+
+          <input type="text" id="trabajador-area-nuevo" placeholder="Nombre de la nueva área"
+            class="hidden mt-2 w-full rounded-2xl border border-blue-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+
+        <!-- CECO -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Área / CECO
+          </label>
+
+          <select id="trabajador-ceco" onchange="alternarCampoNuevo('ceco')"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"></select>
+
+          <input type="text" id="trabajador-ceco-nuevo" placeholder="Nombre del nuevo CECO"
+            class="hidden mt-2 w-full rounded-2xl border border-blue-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+
+        <!-- PUEDE SER RESPONSABLE -->
+        <div class="md:col-span-2">
+          <label class="flex items-center gap-3 cursor-pointer select-none rounded-2xl border border-slate-300 px-5 py-4 hover:bg-slate-50 transition">
+            <input type="checkbox" id="trabajador-es-responsable"
+              class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span class="text-sm font-semibold text-slate-700">
+              Este trabajador puede ser responsable
+              <span class="block text-xs font-normal text-slate-400 mt-0.5">
+                Al activarlo, su nombre quedará disponible para asignarlo como responsable de otros.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="px-8 py-6 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 flex-wrap">
+        <button onclick="cerrarModalTrabajador()"
+          class="px-6 py-3 rounded-2xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 transition">
+          Cancelar
+        </button>
+
+        <button onclick="guardarTrabajador()"
+          class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-200 transition">
+          Guardar Trabajador
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
