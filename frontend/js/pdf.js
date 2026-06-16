@@ -47,27 +47,11 @@ function exportarPDF(){
     }
 
     // =====================================
-    // FILTRO RESPONSABLE
+    // FILTRO CARGO
     // =====================================
 
     const trabajadores =
-
-        window.responsableSeleccionado
-        ===
-        "todos"
-
-        ?
-
-        trabajadoresGlobal
-
-        :
-
-        trabajadoresGlobal.filter(
-            t =>
-                t.responsable
-                ===
-                window.responsableSeleccionado
-        )
+        filtrarPorCargos(trabajadoresGlobal)
 
     // =====================================
     // CECO
@@ -147,10 +131,10 @@ function exportarPDF(){
 
                         text:
 
-                            `Responsable: ${
-                                window.responsableSeleccionado
+                            `Cargo: ${
+                                window.cargosSeleccionados.length
                                 ===
-                                "todos"
+                                0
 
                                 ?
 
@@ -158,7 +142,7 @@ function exportarPDF(){
 
                                 :
 
-                                window.responsableSeleccionado
+                                window.cargosSeleccionados.join(", ")
                             }`,
 
                         fontSize:10,

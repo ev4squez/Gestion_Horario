@@ -32,6 +32,7 @@ app = FastAPI()
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
     _migrar_columna_es_responsable()
+    _migrar_columna_cargo()
 
 
 def _migrar_columna_es_responsable():
@@ -52,6 +53,27 @@ def _migrar_columna_es_responsable():
                 text(
                     "ALTER TABLE trabajadores "
                     "ADD COLUMN es_responsable BOOLEAN DEFAULT 0"
+                )
+            )
+
+
+def _migrar_columna_cargo():
+    """Añade la columna cargo a bases de datos creadas antes de que existiera
+    (mismo patrón que es_responsable, ya que create_all() no altera tablas)."""
+
+    inspector = inspect(engine)
+
+    if "trabajadores" not in inspector.get_table_names():
+        return
+
+    columnas = {c["name"] for c in inspector.get_columns("trabajadores")}
+
+    if "cargo" not in columnas:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE trabajadores "
+                    "ADD COLUMN cargo TEXT DEFAULT 'Sin cargo'"
                 )
             )
 
@@ -169,6 +191,8 @@ class TrabajadorSchema(BaseModel):
 
     ceco: Optional[str] = None
 
+    cargo: Optional[str] = None
+
     es_responsable: Optional[bool] = False
 
 
@@ -181,6 +205,7 @@ def _serializar_trabajador(t: Trabajador) -> dict:
         "jornada": t.jornada,
         "responsable": t.responsable,
         "ceco": t.ceco,
+        "cargo": t.cargo or "Sin cargo",
         "es_responsable": bool(t.es_responsable),
     }
 
@@ -215,6 +240,7 @@ def crear_trabajador(
         jornada=data.jornada,
         responsable=(data.responsable or "").strip(),
         ceco=(data.ceco or "").strip(),
+        cargo=(data.cargo or "").strip() or "Sin cargo",
         es_responsable=bool(data.es_responsable),
     )
 
@@ -262,6 +288,7 @@ def actualizar_trabajador(
     trabajador.jornada = data.jornada
     trabajador.responsable = (data.responsable or "").strip()
     trabajador.ceco = (data.ceco or "").strip()
+    trabajador.cargo = (data.cargo or "").strip() or "Sin cargo"
     trabajador.es_responsable = bool(data.es_responsable)
 
     try:

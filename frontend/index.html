@@ -553,16 +553,23 @@
                 onchange="actualizarVista()"></select>
             </div>
 
-            <!-- RESPONSABLE -->
-            <div class="relative w-full sm:w-auto">
+            <!-- CARGO (selección múltiple) -->
+            <div class="relative w-full sm:w-auto" id="filtro-cargo-wrapper">
               <span
-                class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">
-                manage_accounts
+                class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none z-10">
+                badge
               </span>
-              <select id="filtro-responsable" class="filter-select w-full sm:w-auto min-w-[260px] pr-4"
-                onchange="filtrarResponsable()">
-                <option value="todos">Todos los responsables</option>
-              </select>
+              <button type="button" id="filtro-cargo-btn" onclick="toggleDropdownCargos()"
+                class="filter-select w-full sm:w-auto min-w-[260px] pr-10 text-left">
+                <span id="filtro-cargo-label">Todos los cargos</span>
+                <span
+                  class="material-symbols-outlined text-slate-400 text-lg absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  expand_more
+                </span>
+              </button>
+              <div id="filtro-cargo-panel"
+                class="hidden absolute z-50 mt-2 left-0 w-full min-w-[260px] max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg text-sm p-1">
+              </div>
             </div>
 
             <!-- Divider vertical -->
@@ -977,6 +984,19 @@
             class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"></select>
 
           <input type="text" id="trabajador-area-nuevo" placeholder="Nombre de la nueva área"
+            class="hidden mt-2 w-full rounded-2xl border border-blue-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+        </div>
+
+        <!-- CARGO -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-2 text-slate-700">
+            Cargo
+          </label>
+
+          <select id="trabajador-cargo" onchange="alternarCampoNuevo('cargo')"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"></select>
+
+          <input type="text" id="trabajador-cargo-nuevo" placeholder="Nombre del nuevo cargo"
             class="hidden mt-2 w-full rounded-2xl border border-blue-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
         </div>
 

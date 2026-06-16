@@ -61,6 +61,8 @@ function poblarSelectsTrabajador(){
 
     poblarSelect("trabajador-ceco", trabajadoresGlobal.map(t => t.ceco))
 
+    poblarSelect("trabajador-cargo", trabajadoresGlobal.map(t => t.cargo))
+
 }
 
 // Muestra/oculta el input "nuevo" según lo elegido en el select.
@@ -161,6 +163,7 @@ function nuevoTrabajador(){
     fijarCampo("responsable", "")
     fijarCampo("area", "")
     fijarCampo("ceco", "")
+    fijarCampo("cargo", "")
 
     document.getElementById("trabajador-es-responsable").checked = false
 
@@ -203,6 +206,7 @@ function editarTrabajador(id){
     fijarCampo("responsable", trabajador.responsable || "")
     fijarCampo("area", trabajador.area || "")
     fijarCampo("ceco", trabajador.ceco || "")
+    fijarCampo("cargo", trabajador.cargo || "")
 
     document.getElementById("trabajador-jornada").value =
         trabajador.jornada || "44"
@@ -247,6 +251,7 @@ async function guardarTrabajador(){
         responsable: valorCampo("responsable"),
         area: valorCampo("area"),
         ceco: valorCampo("ceco"),
+        cargo: valorCampo("cargo"),
         jornada:
             parseInt(
                 document.getElementById("trabajador-jornada").value
@@ -307,7 +312,7 @@ async function guardarTrabajador(){
 
     renderizarTrabajadoresCRUD()
 
-    cargarResponsables()
+    cargarCargos()
 
 }
 
@@ -349,6 +354,6 @@ async function eliminarTrabajadorCRUD(id){
 
     renderizarTrabajadoresCRUD()
 
-    cargarResponsables()
+    cargarCargos()
 
 }

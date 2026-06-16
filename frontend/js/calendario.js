@@ -68,7 +68,7 @@ function actualizarVista(){
         ).value
     )
 
-    filtrarResponsable()
+    filtrarCargo()
 
 }
 

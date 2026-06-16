@@ -31,6 +31,10 @@ class Trabajador(Base):
     responsable = Column(String)
     ceco = Column(String)
 
+    # Cargo/puesto del trabajador (p. ej. "Cajero", "Supervisor"). Sirve para
+    # agrupar y filtrar trabajadores por su rol en el casino.
+    cargo = Column(String, default="Sin cargo")
+
     # Marca si este trabajador puede actuar como responsable de otros; al
     # activarse, su nombre aparece en el pool de responsables seleccionables.
     es_responsable = Column(Boolean, default=False)

@@ -6,8 +6,9 @@ let trabajadoresGlobal = []
 
 let planificacionGlobal = []
 
-window.responsableSeleccionado =
-    "todos"
+// Cargos elegidos en el filtro. Array vacío = "todos los cargos" (sin filtro).
+window.cargosSeleccionados =
+    []
 
 
 // =====================================================
@@ -24,7 +25,7 @@ async function cargarSistema(){
 
     inicializarSelectores()
 
-    cargarResponsables()
+    cargarCargos()
 
     renderizarTrabajadores(
         trabajadoresGlobal
@@ -41,104 +42,196 @@ async function cargarSistema(){
 
 
 // =====================================================
-// RESPONSABLES
+// CARGOS (filtro de selección múltiple)
 // =====================================================
+// El filtro es un dropdown propio con casillas: una por cargo más "Todos".
+// El estado vive en window.cargosSeleccionados (array). Vacío = sin filtro.
 
-function cargarResponsables(){
+// Devuelve la lista filtrada según los cargos elegidos.
+function filtrarPorCargos(lista){
 
-    const select =
+    if(
+        !window.cargosSeleccionados ||
+        window.cargosSeleccionados.length === 0
+    ){
+        return lista
+    }
+
+    return lista.filter(
+        t => window.cargosSeleccionados.includes(t.cargo)
+    )
+
+}
+
+// (Re)construye el panel de casillas a partir de los cargos existentes.
+function cargarCargos(){
+
+    const panel =
         document.getElementById(
-            "filtro-responsable"
+            "filtro-cargo-panel"
         )
 
-    select.innerHTML = `
-        <option value="todos">
-            Todos los responsables
-        </option>
-    `
+    if(!panel){ return }
 
-    const responsables = [
+    const cargos = [
 
         ...new Set(
 
             trabajadoresGlobal
 
             .map(
-                t => t.responsable
+                t => t.cargo
             )
 
             .filter(
-                r => r && r.trim() !== ""
+                c => c && c.trim() !== ""
             )
 
         )
 
     ]
 
-    responsables.sort()
+    cargos.sort()
 
-    responsables.forEach(r => {
+    // Descartar de la selección cargos que ya no existen.
+    window.cargosSeleccionados =
+        window.cargosSeleccionados.filter(
+            c => cargos.includes(c)
+        )
 
-        select.innerHTML += `
-            <option value="${escaparHTML(r)}">
-                ${escaparHTML(r)}
-            </option>
+    const todosActivo =
+        window.cargosSeleccionados.length === 0
+
+    let html = `
+        <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50 font-semibold">
+            <input type="checkbox"
+                class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                ${todosActivo ? "checked" : ""}
+                onchange="seleccionarTodosCargos()">
+            <span>Todos los cargos</span>
+        </label>
+        <div class="my-1 border-t border-slate-100"></div>
+    `
+
+    cargos.forEach(c => {
+
+        const marcado =
+            window.cargosSeleccionados.includes(c)
+
+        html += `
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50">
+                <input type="checkbox"
+                    class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    value="${escaparHTML(c)}"
+                    ${marcado ? "checked" : ""}
+                    onchange="alternarCargo(this.value, this.checked)">
+                <span>${escaparHTML(c)}</span>
+            </label>
         `
 
     })
 
+    panel.innerHTML = html
+
+    actualizarEtiquetaCargos()
+
 }
 
+// Texto del botón según cuántos cargos haya elegidos.
+function actualizarEtiquetaCargos(){
 
-// =====================================================
-// FILTRAR RESPONSABLE
-// =====================================================
-
-function filtrarResponsable(){
-
-    window.responsableSeleccionado =
-
+    const label =
         document.getElementById(
-            "filtro-responsable"
-        ).value
-
-    // =====================================
-    // TODOS
-    // =====================================
-
-    if(
-        window.responsableSeleccionado
-        ===
-        "todos"
-    ){
-
-        renderizarTrabajadores(
-            trabajadoresGlobal
+            "filtro-cargo-label"
         )
 
-        renderizarResumenDomingos(
-            trabajadoresGlobal
-        )
+    if(!label){ return }
 
-        renderizarAlertas(
-            trabajadoresGlobal
-        )
+    const n = window.cargosSeleccionados.length
 
-        return
-
+    if(n === 0){
+        label.textContent = "Todos los cargos"
+    }else if(n === 1){
+        label.textContent = window.cargosSeleccionados[0]
+    }else{
+        label.textContent = `${n} cargos`
     }
 
-    // =====================================
-    // FILTRADOS
-    // =====================================
+}
+
+// Muestra/oculta el panel.
+function toggleDropdownCargos(){
+
+    const panel =
+        document.getElementById(
+            "filtro-cargo-panel"
+        )
+
+    if(!panel){ return }
+
+    panel.classList.toggle("hidden")
+
+}
+
+// Marca/desmarca un cargo concreto.
+function alternarCargo(cargo, marcado){
+
+    const set =
+        new Set(window.cargosSeleccionados)
+
+    if(marcado){
+        set.add(cargo)
+    }else{
+        set.delete(cargo)
+    }
+
+    window.cargosSeleccionados = [...set]
+
+    cargarCargos()
+    filtrarCargo()
+
+}
+
+// "Todos": limpia la selección (= sin filtro).
+function seleccionarTodosCargos(){
+
+    window.cargosSeleccionados = []
+
+    cargarCargos()
+    filtrarCargo()
+
+}
+
+// Cerrar el panel al hacer clic fuera del filtro.
+document.addEventListener("mousedown", function(e){
+
+    const wrapper =
+        document.getElementById(
+            "filtro-cargo-wrapper"
+        )
+
+    const panel =
+        document.getElementById(
+            "filtro-cargo-panel"
+        )
+
+    if(!wrapper || !panel){ return }
+
+    if(!wrapper.contains(e.target)){
+        panel.classList.add("hidden")
+    }
+
+})
+
+
+// =====================================================
+// FILTRAR CARGO (aplica la selección a las vistas)
+// =====================================================
+
+function filtrarCargo(){
 
     const filtrados =
-        trabajadoresGlobal.filter(
-            t =>
-                t.responsable
-                ===
-                window.responsableSeleccionado
-        )
+        filtrarPorCargos(trabajadoresGlobal)
 
     renderizarTrabajadores(
         filtrados
@@ -721,23 +814,7 @@ async function guardarTurno(input){
     // =====================================
 
     const listaRender =
-
-        window.responsableSeleccionado
-        ===
-        "todos"
-
-        ?
-
-        trabajadoresGlobal
-
-        :
-
-        trabajadoresGlobal.filter(
-            t =>
-                t.responsable
-                ===
-                window.responsableSeleccionado
-        )
+        filtrarPorCargos(trabajadoresGlobal)
 
     // =====================================
     // RENDER
