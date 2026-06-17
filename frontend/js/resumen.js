@@ -879,6 +879,119 @@ const turnos = planificacionGlobal
 
 
 // =====================================================
+// ALERTAS DE HORAS SEMANALES (jornada)
+// =====================================================
+// Compara las horas trabajadas por semana con la jornada del trabajador.
+// Más horas que la jornada => alerta (warning); menos => info. Se recorren
+// las mismas semanas que la grilla (generarSemanas, Lun–Dom) para que las
+// horas coincidan con las que se muestran en cada tarjeta.
+
+function calcularAlertasHoras(
+    trabajadores
+){
+
+    const alertas = []
+
+    const semanas =
+        generarSemanas(
+            mesActual,
+            anioActual
+        )
+
+    trabajadores.forEach(trabajador => {
+
+        const jornada =
+            parseInt(trabajador.jornada) || 0
+
+        // Sin jornada definida no hay con qué comparar.
+        if(!jornada){ return }
+
+        const colacion =
+            colacionPorCeco(trabajador.ceco)
+
+        semanas.forEach((semana, index) => {
+
+            // =====================================
+            // TURNOS DE LA SEMANA (Lun–Dom)
+            // =====================================
+
+            const turnosSemana = []
+
+            for(let dia=0; dia<7; dia++){
+
+                const fecha =
+                    new Date(semana.inicio)
+
+                fecha.setDate(
+                    fecha.getDate() + dia
+                )
+
+                const fechaTexto =
+                    `${fecha.getFullYear()}-${
+                        String(fecha.getMonth() + 1).padStart(2,"0")
+                    }-${
+                        String(fecha.getDate()).padStart(2,"0")
+                    }`
+
+                turnosSemana.push(
+                    obtenerTurnoGuardado(
+                        trabajador.id,
+                        fechaTexto
+                    )
+                )
+
+            }
+
+            const horas =
+                calcularHorasSemana(
+                    turnosSemana,
+                    colacion
+                )
+
+            // Semana sin trabajo (toda Libre): no se reporta.
+            if(horas <= 0){ return }
+
+            // Cumple exacto la jornada: nada que reportar.
+            if(horas === jornada){ return }
+
+            const diferencia =
+                Math.round((horas - jornada) * 10) / 10
+
+            alertas.push({
+
+                kind: "horas",
+
+                tipo:
+                    horas > jornada
+                        ? "warning"
+                        : "info",
+
+                trabajador:
+                    trabajador.nombre,
+
+                responsable:
+                    trabajador.responsable,
+
+                semana: index + 1,
+
+                horas,
+
+                jornada,
+
+                diferencia
+
+            })
+
+        })
+
+    })
+
+    return alertas
+
+}
+
+
+// =====================================================
 // RENDER ALERTAS
 // =====================================================
 
@@ -893,10 +1006,27 @@ function renderizarAlertas(
 
     if (!contenedor) return
 
-    const alertas =
+    const alertasDescanso =
         calcularAlertasDescanso(
             trabajadores
         )
+
+    const alertasCobertura =
+        typeof calcularAlertasCobertura === "function"
+            ? calcularAlertasCobertura()
+            : []
+
+    const alertasHoras =
+        calcularAlertasHoras(
+            trabajadores
+        )
+
+    const alertas =
+        [
+            ...alertasDescanso,
+            ...alertasHoras,
+            ...alertasCobertura
+        ]
 
     // =====================================
     // SIN ALERTAS
@@ -929,6 +1059,10 @@ function renderizarAlertas(
 
     alertas.forEach(alerta => {
 
+        // =====================================
+        // COLOR SEGÚN SEVERIDAD
+        // =====================================
+
         let colorCard = `
             border-amber-200
             bg-amber-50
@@ -938,12 +1072,6 @@ function renderizarAlertas(
             bg-amber-100
             text-amber-600
         `
-
-        let icono =
-            "notifications_active"
-
-        let estado =
-            "Advertencia"
 
         if (
             alerta.tipo === "danger"
@@ -959,11 +1087,83 @@ function renderizarAlertas(
                 text-red-600
             `
 
+        } else if (
+            alerta.tipo === "info"
+        ) {
+
+            colorCard = `
+                border-blue-200
+                bg-blue-50
+            `
+
+            colorIcon = `
+                bg-blue-100
+                text-blue-600
+            `
+
+        }
+
+        // =====================================
+        // CONTENIDO SEGÚN TIPO DE ALERTA
+        // =====================================
+
+        let icono
+        let estado
+        let titulo
+        let detalle
+        let subtitulo
+        let iconoSub
+        let iconoDetalle
+
+        if (alerta.kind === "cobertura") {
+
             icono =
-                "priority_high"
+                alerta.tipo === "danger" ? "report" : "fact_check"
 
             estado =
-                "Crítico"
+                alerta.tipo === "danger" ? "Cobertura crítica" : "Cobertura"
+
+            titulo = alerta.titulo
+            subtitulo = alerta.detalle
+            detalle = alerta.mensaje
+            iconoSub = "schedule"
+            iconoDetalle = "group"
+
+        } else if (alerta.kind === "horas") {
+
+            const exceso =
+                alerta.tipo === "warning"
+
+            const dif =
+                Math.abs(alerta.diferencia).toFixed(1)
+
+            icono = exceso ? "more_time" : "schedule"
+            estado = exceso ? "Horas extra" : "Bajo jornada"
+            titulo = alerta.trabajador
+            subtitulo = `Semana ${alerta.semana}`
+
+            detalle =
+                `<span class="font-black">${alerta.horas}h</span> / ${alerta.jornada}h · ${
+                    exceso ? `+${dif}h` : `faltan ${dif}h`
+                }`
+
+            iconoSub = "calendar_month"
+            iconoDetalle = "schedule"
+
+        } else {
+
+            // Descanso entre turnos.
+            icono =
+                alerta.tipo === "danger" ? "priority_high" : "notifications_active"
+
+            estado =
+                alerta.tipo === "danger" ? "Crítico" : "Advertencia"
+
+            titulo = alerta.trabajador
+            subtitulo = `${escaparHTML(alerta.fecha1)} → ${escaparHTML(alerta.fecha2)}`
+            detalle = `Descanso: <span class="font-black">${alerta.descanso.toFixed(1)}h</span>`
+            iconoSub = "schedule"
+            iconoDetalle = "hotel"
 
         }
 
@@ -984,26 +1184,27 @@ function renderizarAlertas(
                         <!-- TOP -->
                         <div class="flex items-center justify-between gap-2">
                             <h3 class="font-black text-slate-800 text-xs truncate">
-                                ${escaparHTML(alerta.trabajador)}
+                                ${escaparHTML(titulo)}
                             </h3>
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${colorIcon}">
                                 ${estado}
                             </span>
                         </div>
 
-                        <!-- FECHAS -->
+                        <!-- DETALLE -->
                         <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
-                            <span class="material-symbols-outlined text-sm text-slate-400">schedule</span>
-                            <span>${escaparHTML(alerta.fecha1)}</span>
-                            <span class="text-slate-400">→</span>
-                            <span>${escaparHTML(alerta.fecha2)}</span>
+                            <span class="material-symbols-outlined text-sm text-slate-400">
+                                ${iconoSub}
+                            </span>
+                            <span>${subtitulo}</span>
                         </div>
 
-                        <!-- DESCANSO -->
                         <div class="mt-1.5 flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-sm text-slate-400">hotel</span>
+                            <span class="material-symbols-outlined text-sm text-slate-400">
+                                ${iconoDetalle}
+                            </span>
                             <p class="text-[11px] font-semibold text-slate-700">
-                                Descanso: <span class="font-black">${alerta.descanso.toFixed(1)}h</span>
+                                ${detalle}
                             </p>
                         </div>
 

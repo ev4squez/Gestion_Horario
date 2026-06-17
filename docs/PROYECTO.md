@@ -25,12 +25,14 @@
 - [x] Exportación PDF con cabecera corporativa
 - [x] CRUD colaboradores con autenticación
 - [x] Filtros por Área y CECO
+- [x] Configuración y validación de cobertura por Área/CECO
 - [x] Despliegue Docker
 
 ## Reglas de negocio clave
 - Descanso mínimo entre jornadas: 12 horas
 - Jornada sábado que termina después de 00:00 cuenta como domingo
 - Módulo admin protegido por contraseña
+- Cobertura operativa configurable por Área o CECO: día, hora inicio, hora fin y dotación mínima
 
 ## Roadmap pendiente
 - [ ] Usuarios múltiples + roles y permisos
@@ -38,6 +40,7 @@
 - [ ] Auditoría y bitácora de cambios
 - [ ] Exportación Excel en formato admitido por Defontana
 - [ ] Dashboard KPI obtimizacion de los recursos
+- [ ] Exportar reporte de brechas de cobertura
 - [ ] Botón de sugerencia de programación automática de turnos
   - **Restricciones legales (límite duro, inviolables):**
     - Descanso mínimo de 12h entre el fin de una jornada y el inicio de la siguiente

@@ -2,8 +2,10 @@ from .database import engine, Base
 
 # IMPORTANTE
 from .models import Planificacion
+from .models import ConfiguracionCobertura
 
 print(Planificacion.__tablename__)
+print(ConfiguracionCobertura.__tablename__)
 
 print("Creando tablas...")
 

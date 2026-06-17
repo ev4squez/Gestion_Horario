@@ -70,6 +70,10 @@ function actualizarVista(){
 
     filtrarCargo()
 
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
+
 }
 
 

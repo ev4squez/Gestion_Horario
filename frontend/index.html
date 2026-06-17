@@ -455,13 +455,20 @@
 
       <!-- MENU -->
       <nav class="flex xl:flex-col overflow-x-auto xl:overflow-visible gap-2 px-4 xl:px-4 pb-4">
-        <button class="menu-item active flex items-center gap-3 px-4 py-3 text-white whitespace-nowrap">
+        <button id="menu-planificacion" onclick="mostrarVistaPlanificacion()"
+          class="menu-item active flex items-center gap-3 px-4 py-3 text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl">calendar_month</span>
           <span class="font-600 sidebar-text">Planificación</span>
         </button>
 
-        <button onclick="accederCRUD()"
-          class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+        <button id="menu-cobertura" onclick="mostrarVistaCobertura()"
+          class="menu-item  flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">fact_check</span>
+          <span class="font-500 sidebar-text">Cobertura</span>
+        </button>
+
+        <button id="menu-colaboradores" onclick="accederCRUD()"
+          class="menu-item  flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl">groups</span>
           <span class="font-500 sidebar-text">Colaboradores</span>
         </button>
@@ -705,6 +712,133 @@
                 </div>
               </div>
             </div>
+
+            <!-- ===================================== -->
+            <!-- VISTA COBERTURA -->
+            <!-- ===================================== -->
+
+            <div id="vista-cobertura" class="hidden mt-6">
+              <div class="card p-6 md:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+                  <div>
+                    <h2 class="text-3xl font-black text-slate-800">
+                      Cobertura Operativa
+                    </h2>
+                    <p class="text-slate-500 mt-2">
+                      Validación de apertura, cierre y continuidad por área o CECO.
+                    </p>
+                  </div>
+                  <span id="badge-cobertura"
+                    class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold self-start">
+                    Sin reglas
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-5 gap-6">
+                  <div class="2xl:col-span-2 border border-slate-200 rounded-2xl p-5 bg-slate-50">
+                    <h3 class="font-black text-slate-800 mb-4">
+                      Configuración semanal
+                    </h3>
+
+                    <input type="hidden" id="cobertura-id" />
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Agrupar por</label>
+                        <select id="cobertura-tipo" onchange="poblarValoresCobertura()"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                          <option value="ceco">CECO</option>
+                          <option value="area">Área</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Valor</label>
+                        <select id="cobertura-valor"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Día</label>
+                        <select id="cobertura-dia"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                          <option value="0">Lunes</option>
+                          <option value="1">Martes</option>
+                          <option value="2">Miércoles</option>
+                          <option value="3">Jueves</option>
+                          <option value="4">Viernes</option>
+                          <option value="5">Sábado</option>
+                          <option value="6">Domingo</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Mínimo personas</label>
+                        <input type="number" min="1" id="cobertura-minimo" value="1"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Inicio cobertura</label>
+                        <input type="time" id="cobertura-inicio" value="09:00"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Fin cobertura</label>
+                        <input type="time" id="cobertura-fin" value="05:00"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+                    </div>
+
+                    <label class="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <input type="checkbox" id="cobertura-activo" checked
+                        class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                      Regla activa
+                    </label>
+
+                    <div class="flex flex-wrap gap-3 mt-5">
+                      <button onclick="guardarReglaCobertura()"
+                        class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[20px]">save</span>
+                        Guardar regla
+                      </button>
+                      <button onclick="limpiarFormularioCobertura()"
+                        class="px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition">
+                        Limpiar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="2xl:col-span-3 space-y-6">
+                    <div class="overflow-auto rounded-2xl border border-slate-200">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th class="p-3 text-left">Tipo</th>
+                            <th class="p-3 text-left">Área / CECO</th>
+                            <th class="p-3 text-left">Día</th>
+                            <th class="p-3 text-left">Horario</th>
+                            <th class="p-3 text-center">Mín.</th>
+                            <th class="p-3 text-center">Estado</th>
+                            <th class="p-3 text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody id="tabla-cobertura-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                      </table>
+                    </div>
+
+                    <div>
+                      <h3 class="font-black text-slate-800 mb-3">
+                        Resultado del mes seleccionado
+                      </h3>
+                      <div id="resultado-cobertura" class="space-y-3"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <!-- RIGHT PANEL -->
           <div id="right-panel"
@@ -800,12 +934,14 @@
     <option value="19:30 - 06:00"></option>
     <option value="Libre"></option>
     <option value="Saliente"></option>
+    <option value="Vacaciones"></option>
   </datalist>
 
   <!-- JS (sin cambios) -->
   <script src="js/api.js"></script>
   <script src="js/calendario.js"></script>
   <script src="js/resumen.js"></script>
+  <script src="js/cobertura.js"></script>
   <script src="js/app.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
@@ -1015,7 +1151,8 @@
 
         <!-- PUEDE SER RESPONSABLE -->
         <div class="md:col-span-2">
-          <label class="flex items-center gap-3 cursor-pointer select-none rounded-2xl border border-slate-300 px-5 py-4 hover:bg-slate-50 transition">
+          <label
+            class="flex items-center gap-3 cursor-pointer select-none rounded-2xl border border-slate-300 px-5 py-4 hover:bg-slate-50 transition">
             <input type="checkbox" id="trabajador-es-responsable"
               class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
             <span class="text-sm font-semibold text-slate-700">

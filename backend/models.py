@@ -79,3 +79,35 @@ class Planificacion(Base):
         default=_now,
         onupdate=_now,
     )
+
+
+class ConfiguracionCobertura(Base):
+
+    __tablename__ = "configuracion_cobertura"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # "ceco" o "area". Define contra qué campo del trabajador se evalúa.
+    tipo = Column(String, nullable=False)
+
+    # Valor exacto del CECO o área que debe cubrirse.
+    valor = Column(String, nullable=False)
+
+    # 0=Lunes ... 6=Domingo, igual que el calendario visual del sistema.
+    dia_semana = Column(Integer, nullable=False)
+
+    hora_inicio = Column(String, nullable=False)
+
+    hora_fin = Column(String, nullable=False)
+
+    minimo_personas = Column(Integer, default=1, nullable=False)
+
+    activo = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=_now)
+
+    updated_at = Column(
+        DateTime,
+        default=_now,
+        onupdate=_now,
+    )

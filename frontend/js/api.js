@@ -146,3 +146,51 @@ async function guardarPlanificacion(data) {
     return response
 
 }
+
+
+// =====================================================
+// CONFIGURACIÓN COBERTURA
+// =====================================================
+
+async function obtenerConfiguracionCobertura() {
+
+    const response = await fetch(`/cobertura/config`)
+
+    return await response.json()
+
+}
+
+async function crearConfiguracionCobertura(data) {
+
+    const response = await fetch(`/cobertura/config`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data)
+    })
+
+    return response
+
+}
+
+async function actualizarConfiguracionCobertura(id, data) {
+
+    const response = await fetch(`/cobertura/config/${id}`, {
+        method: "PUT",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data)
+    })
+
+    return response
+
+}
+
+async function eliminarConfiguracionCobertura(id) {
+
+    const response = await fetch(`/cobertura/config/${id}`, {
+        method: "DELETE",
+        headers: authHeaders()
+    })
+
+    return response
+
+}

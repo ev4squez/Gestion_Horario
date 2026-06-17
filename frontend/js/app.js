@@ -23,6 +23,11 @@ async function cargarSistema(){
     planificacionGlobal =
         await obtenerPlanificacion()
 
+    if(typeof obtenerConfiguracionCobertura === "function"){
+        coberturaConfigGlobal =
+            await obtenerConfiguracionCobertura()
+    }
+
     inicializarSelectores()
 
     cargarCargos()
@@ -37,6 +42,10 @@ async function cargarSistema(){
     renderizarAlertas(
     trabajadoresGlobal
 )
+
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
 
 }
 
@@ -244,6 +253,10 @@ function filtrarCargo(){
     renderizarAlertas(
         filtrados
     )
+
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
 
 }
 
@@ -836,6 +849,10 @@ async function guardarTurno(input){
     renderizarResumenDomingos(
         listaRender
     )
+
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
 
 }
 

@@ -18,5 +18,9 @@
       "Bash(node --check frontend/js/resumen.js)",
       "Bash(rm -f /tmp/dom_*.png /tmp/dom.js)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "codegraph"
+  ],
+  "enableAllProjectMcpServers": true
 }

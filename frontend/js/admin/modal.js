@@ -1,4 +1,24 @@
+function marcarMenuActivo(idBoton) {
+
+    document
+        .querySelectorAll("#sidebar nav .menu-item")
+        .forEach(boton => {
+
+            const activo = boton.id === idBoton
+
+            boton.classList.toggle("active", activo)
+
+            boton.classList.toggle("text-white", activo)
+
+            boton.classList.toggle("text-slate-400", !activo)
+
+        })
+
+}
+
 function mostrarVistaTrabajadores() {
+
+    marcarMenuActivo("menu-colaboradores")
 
     document
         .getElementById(
@@ -13,6 +33,14 @@ function mostrarVistaTrabajadores() {
             "vista-trabajadores"
         )
         .classList.remove(
+            "hidden"
+        )
+
+    document
+        .getElementById(
+            "vista-cobertura"
+        )
+        .classList.add(
             "hidden"
         )
 
@@ -24,6 +52,8 @@ function mostrarVistaTrabajadores() {
 
 function mostrarVistaPlanificacion() {
 
+    marcarMenuActivo("menu-planificacion")
+
     document
         .getElementById(
             "vista-planificacion"
@@ -39,6 +69,48 @@ function mostrarVistaPlanificacion() {
         .classList.add(
             "hidden"
         )
+
+    document
+        .getElementById(
+            "vista-cobertura"
+        )
+        .classList.add(
+            "hidden"
+        )
+
+}
+
+function mostrarVistaCobertura() {
+
+    marcarMenuActivo("menu-cobertura")
+
+    document
+        .getElementById(
+            "vista-planificacion"
+        )
+        .classList.add(
+            "hidden"
+        )
+
+    document
+        .getElementById(
+            "vista-trabajadores"
+        )
+        .classList.add(
+            "hidden"
+        )
+
+    document
+        .getElementById(
+            "vista-cobertura"
+        )
+        .classList.remove(
+            "hidden"
+        )
+
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
 
 }
 
