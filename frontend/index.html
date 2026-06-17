@@ -848,15 +848,23 @@
                   background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
                   box-shadow: 0 10px 36px rgba(59, 110, 248, 0.35);
                 ">
-              <div class="relative z-10 flex items-center justify-between">
+              <button type="button" onclick="generarPlanificacionAutomatica()"
+                class="relative z-10 flex items-center justify-between w-full text-left cursor-pointer hover:scale-[1.02] transition-all duration-200">
                 <div>
                   <p class="text-blue-100/80 text-xs font-700 uppercase tracking-widest mb-2">
-                    Horas Totales
+                    Generar
                   </p>
-                  <h3 id="total-horas" class="stat-number">0</h3>
+                  <h3 id="total-horas" class="stat-number">
+                    Planificación Automática
+                  </h3>
                 </div>
-                <span class="material-symbols-outlined text-white/30" style="font-size: 56px">timer</span>
-              </div>
+
+                <span
+                  class="material-symbols-outlined text-white/30 transition-all duration-300 group-hover:text-white/60 group-hover:scale-110"
+                  style="font-size: 56px">
+                  smart_toy
+                </span>
+              </button>
             </div>
 
             <!-- TRABAJADORES STAT -->
