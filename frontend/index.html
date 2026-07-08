@@ -367,6 +367,87 @@
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* ── MODO SAAS ADMIN (vista dedicada fullscreen) ─ */
+    /* El super-admin no necesita ver NADA más: ni sidebar, ni header
+       principal, ni panel derecho, ni siquiera el header dedicado que
+       pusimos antes. La vista SaaS Admin ocupa toda la pantalla con
+       su propio header interno. Para volver/cerrar sesión usamos los
+       botones que están dentro de la propia vista. */
+    body.modo-saas #sidebar,
+    body.modo-saas main > header.header-glass,
+    body.modo-saas #right-panel,
+    body.modo-saas #saas-admin-header {
+      display: none !important;
+    }
+    /* El main mismo se oculta: la vista SaaS Admin se saca del flujo
+       normal y se muestra como overlay absoluto de pantalla completa. */
+    body.modo-saas main {
+      display: none !important;
+    }
+    body.modo-saas #vista-saas-admin {
+      display: flex !important;
+      flex-direction: column !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      margin: 0 !important;
+      padding: 1.5rem 2rem !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      z-index: 2147483647 !important;
+      pointer-events: auto !important;
+      /* Fondo gris muy claro del sistema, igual al de la app principal */
+      background: #f8fafc !important;
+      color: #0f172a !important;
+    }
+    /* Header interno: tarjeta blanca con borde sutil slate, sin bordes
+       gruesos de debug */
+    body.modo-saas #vista-saas-admin > div:first-child {
+      background: #ffffff !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 16px !important;
+      padding: 16px 20px !important;
+      margin-bottom: 16px !important;
+    }
+    /* Tipografía coherente con el resto de la app */
+    body.modo-saas #vista-saas-admin h2 {
+      color: #1e293b !important;
+      font-size: 24px !important;
+      font-weight: 800 !important;
+    }
+    body.modo-saas #vista-saas-admin .text-slate-500 {
+      color: #64748b !important;
+      font-size: 14px !important;
+    }
+    /* Botones del header interno: estilo consistente con la app */
+    body.modo-saas #vista-saas-admin button {
+      background: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+      padding: 10px 16px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      border-radius: 12px !important;
+    }
+    body.modo-saas #vista-saas-admin button:hover {
+      background: #e2e8f0 !important;
+    }
+    /* Botón "Cerrar sesión": rojo del proyecto (mismo que el sidebar) */
+    body.modo-saas #vista-saas-admin button:first-of-type {
+      background: #f1f5f9 !important;
+      color: #334155 !important;
+      border-color: #cbd5e1 !important;
+    }
+    /* El wrapper flex-col xl:flex-row del body también debe ceder. */
+    body.modo-saas > div.flex.flex-col {
+      display: block !important;
+    }
+
     /* ── SIDEBAR LOGO ANIMATE ─────────────────── */
     @keyframes fadeSlideIn {
       from {
@@ -462,37 +543,55 @@
         </button>
 
         <button id="menu-cobertura" onclick="mostrarVistaCobertura()"
-          class="menu-item  flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl">fact_check</span>
           <span class="font-500 sidebar-text">Cobertura</span>
         </button>
 
         <button id="menu-colaboradores" onclick="accederCRUD()"
-          class="menu-item  flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl">groups</span>
           <span class="font-500 sidebar-text">Colaboradores</span>
         </button>
 
-        <hr class="nav-divider sidebar-text" />
-
-        <button class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
-          <span class="material-symbols-outlined text-xl">analytics</span>
-          <span class="font-500 sidebar-text">Reportes</span>
+        <button id="menu-usuarios" onclick="mostrarVistaUsuarios()"
+          class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">manage_accounts</span>
+          <span class="font-500 sidebar-text">Usuarios</span>
         </button>
 
-        <button class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+        <button id="menu-alertas" onclick="mostrarVistaAlertas()"
+          class="menu-item flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl" style="color: #fbbf24">warning</span>
           <span class="font-500 sidebar-text">Alertas</span>
+        </button>
+
+        <button id="menu-saas-admin" onclick="mostrarVistaSaasAdmin()"
+          class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl" style="color: #a78bfa">business</span>
+          <span class="font-500 sidebar-text">SaaS Admin</span>
         </button>
       </nav>
 
       <!-- SIDEBAR FOOTER -->
       <div class="mt-auto p-5 border-t border-white/6 sidebar-text">
-        <div class="flex items-center gap-3 px-2 py-3 rounded-2xl hover:bg-white/5 transition cursor-pointer">
+        <!-- INICIAR SESIÓN (solo sin sesión activa) -->
+        <button id="btn-login" onclick="iniciarSesion()"
+          class="w-full mt-2 flex items-center gap-3 px-2 py-3 rounded-2xl hover:bg-white/5 transition text-left">
           <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-            <span class="material-symbols-outlined text-slate-300 text-lg">settings</span>
+            <span class="material-symbols-outlined text-emerald-400 text-lg">login</span>
           </div>
-          <span class="text-slate-400 text-sm font-500">Configuración</span>
+          <span class="text-emerald-400 text-sm font-500">Iniciar sesión</span>
+        </button>
+
+        <!-- EMPRESA ACTIVA (visible solo con sesión) -->
+        <div id="badge-empresa-sidebar" class="hidden w-full mt-2 px-2 py-2 rounded-2xl bg-white/5">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-none mb-1">
+            Empresa
+          </p>
+          <p id="texto-empresa-sidebar" class="text-white text-sm font-semibold truncate">
+            —
+          </p>
         </div>
 
         <!-- CERRAR SESIÓN (solo con sesión activa) -->
@@ -501,7 +600,7 @@
           <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
             <span class="material-symbols-outlined text-red-400 text-lg">logout</span>
           </div>
-          <span class="text-red-400 text-sm font-500">Cerrar sesión</span>
+          <span id="texto-sesion" class="text-red-400 text-sm font-500">Cerrar sesión</span>
         </button>
       </div>
     </aside>
@@ -606,7 +705,7 @@
             <!-- VISTA PLANIFICACIÓN -->
             <!-- ===================================== -->
 
-            <div id="vista-planificacion" class="card p-6 md:p-8 min-h-full">
+<div id="vista-planificacion" class="hidden card p-6 md:p-8 min-h-full">
               <!-- PANEL HEADER -->
               <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
                 <div>
@@ -619,11 +718,302 @@
                   </p>
                 </div>
 
-                <div class="badge-active flex-shrink-0">Dashboard Activo</div>
+                <div class="flex flex-col gap-3 flex-shrink-0 w-full md:w-auto">
+                  <div class="stat-card xl:flex-none flex items-center gap-3 px-4 py-3 self-start md:self-end"
+                    style="
+                      background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+                      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+                    ">
+                    <p id="total-trabajadores" class="text-white font-black text-3xl leading-tight">
+                      0
+                    </p>
+                  </div>
+
+                  <label class="relative block w-full md:w-[22rem]">
+                    <span class="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                      search
+                    </span>
+                    <input id="busqueda-planificacion" type="search" oninput="aplicarBusquedaPlanificacion()"
+                      placeholder="Buscar colaborador, turno, cargo, CECO o responsable"
+                      class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                  </label>
+                </div>
               </div>
 
               <!-- CONTENEDOR RESPONSABLES -->
               <div id="contenedor-responsables" class="space-y-8"></div>
+            </div>
+
+  <!-- ===================================== -->
+  <!-- VISTA SaaS ADMIN (solo super-admin) -->
+  <!-- ===================================== -->
+
+            <div id="vista-saas-admin" class="hidden mt-6">
+
+    <!-- Header interno de la vista (solo visible cuando body.modo-saas) -->
+    <div class="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+          style="background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35);">
+          <span class="material-symbols-outlined text-white text-2xl">business</span>
+        </div>
+        <div>
+          <h2 class="text-2xl md:text-3xl font-black text-slate-800">SaaS Admin</h2>
+          <p class="text-slate-500 text-xs md:text-sm font-500 mt-0.5">
+            Gestión multi-empresa · <span id="saas-actor-username">super-admin</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="salirModoSaas()"
+          class="px-4 py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+          <span class="material-symbols-outlined text-lg">arrow_back</span>
+          Volver
+        </button>
+        <button type="button" onclick="cerrarSesionAdmin()"
+          class="px-4 py-2 rounded-2xl bg-red-100 hover:bg-red-200 text-red-700 font-semibold transition flex items-center gap-2">
+          <span class="material-symbols-outlined text-lg">logout</span>
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats globales (tarjetas resumen) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div class="card p-5">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Empresas</p>
+        <p id="saas-stat-empresas" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p class="text-xs text-slate-400 mt-1"><span id="saas-stat-empresas-activas">0</span> activas</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Usuarios</p>
+        <p id="saas-stat-usuarios" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p class="text-xs text-slate-400 mt-1">sumados en todas las empresas</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Trabajadores</p>
+        <p id="saas-stat-trabajadores" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p class="text-xs text-slate-400 mt-1">sumados en todas las empresas</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Actividad reciente</p>
+        <p id="saas-stat-audit" class="text-3xl font-black text-slate-800 mt-1">—</p>
+        <p class="text-xs text-slate-400 mt-1">acciones del super-admin</p>
+      </div>
+    </div>
+
+    <!-- Tabs: Empresas | Actividad -->
+    <div class="flex gap-2 mb-5">
+      <button type="button" data-saas-tab="empresas" onclick="cambiarTabSaas('empresas')"
+        class="saas-tab px-5 py-2 rounded-full bg-slate-900 text-white text-xs font-bold">
+        Empresas
+      </button>
+      <button type="button" data-saas-tab="actividad" onclick="cambiarTabSaas('actividad')"
+        class="saas-tab px-5 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+        Actividad
+      </button>
+    </div>
+
+    <!-- Tab: Empresas -->
+    <div data-saas-panel="empresas">
+
+      <!-- Form: Nueva empresa -->
+      <div class="rounded-2xl border border-slate-200 p-5 mb-6">
+        <h3 class="font-black text-slate-800 mb-3">Nueva empresa</h3>
+        <p class="text-xs text-slate-500 mb-3">
+          Al crearla, se autogenera un usuario administrador
+          (<code class="bg-slate-100 px-1 rounded">admin-&lt;slug&gt;</code>).
+          Te mostraremos su contraseña una sola vez para que se la
+          entregues al cliente de forma segura.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input type="text" id="saas-empresa-slug" placeholder="slug (ej. casino-norte)"
+            class="rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          <input type="text" id="saas-empresa-nombre" placeholder="Nombre"
+            class="rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          <input type="text" id="saas-empresa-rut" placeholder="RUT (opcional)"
+            class="rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          <button type="button" onclick="crearEmpresaSaaS()"
+            class="rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">add</span>
+            Crear
+          </button>
+        </div>
+      </div>
+
+      <!-- Filtros tabla -->
+      <div class="rounded-2xl border border-slate-200 p-4 mb-3 flex flex-wrap items-center gap-3">
+        <div class="relative flex-1 min-w-[200px]">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">search</span>
+          <input id="saas-busqueda" type="search" oninput="filtrarEmpresasSaas()"
+            placeholder="Buscar por slug, nombre o RUT"
+            class="w-full pl-10 pr-4 py-2 rounded-2xl border border-slate-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 text-sm" />
+        </div>
+        <select id="saas-filtro-estado" onchange="filtrarEmpresasSaas()"
+          class="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Todas</option>
+          <option value="activo">Activas</option>
+          <option value="inactivo">Inactivas</option>
+        </select>
+      </div>
+
+      <!-- Tabla: Empresas -->
+      <div class="rounded-2xl border border-slate-200 p-5">
+        <h3 class="font-black text-slate-800 mb-3">Empresas registradas</h3>
+        <div class="overflow-auto rounded-2xl border border-slate-200">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-left text-white">
+              <tr>
+                <th class="p-3">Slug</th>
+                <th class="p-3">Nombre</th>
+                <th class="p-3">RUT</th>
+                <th class="p-3 text-center">Estado</th>
+                <th class="p-3 text-center">Stats</th>
+                <th class="p-3">Creada</th>
+                <th class="p-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpo-saas-empresas" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tab: Actividad -->
+    <div data-saas-panel="actividad" class="hidden">
+      <div class="rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+          <h3 class="font-black text-slate-800">Actividad reciente</h3>
+          <button type="button" onclick="cargarAuditSaas()"
+            class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">refresh</span>
+            Refrescar
+          </button>
+        </div>
+        <div id="cuerpo-saas-audit" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- Modal: gestión de usuarios de una empresa -->
+    <div id="modal-usuarios-empresa-saas"
+      class="hidden fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white rounded-3xl w-full max-w-3xl p-6 md:p-8 shadow-2xl flex flex-col max-h-[92vh]">
+        <div class="flex items-start justify-between gap-4 mb-5">
+          <div class="min-w-0 flex-1">
+            <h3 class="text-2xl font-black text-slate-800">
+              Usuarios de <span id="usuarios-empresa-nombre" class="text-purple-700">—</span>
+            </h3>
+            <p id="usuarios-empresa-slug" class="text-xs font-mono text-slate-500 mt-0.5">—</p>
+          </div>
+          <button type="button" onclick="cerrarModalUsuariosEmpresaSaas()"
+            class="text-slate-400 hover:text-slate-700 transition">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <!-- Form: nuevo usuario -->
+        <div class="rounded-2xl border border-slate-200 p-4 mb-4">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Nuevo usuario</p>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input type="text" id="saas-usuario-nuevo-username" placeholder="username"
+              class="rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+            <input type="text" id="saas-usuario-nuevo-nombre" placeholder="Nombre"
+              class="rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+            <input type="password" id="saas-usuario-nuevo-password" placeholder="Contraseña"
+              class="rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+            <button type="button" onclick="crearUsuarioEmpresaSaas()"
+              class="rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition flex items-center justify-center gap-1 text-sm">
+              <span class="material-symbols-outlined text-base">person_add</span>
+              Crear
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla: usuarios -->
+        <div class="overflow-auto rounded-2xl border border-slate-200 flex-1">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-700 sticky top-0">
+              <tr>
+                <th class="p-2 text-left">Usuario</th>
+                <th class="p-2 text-left">Nombre</th>
+                <th class="p-2 text-center">Estado</th>
+                <th class="p-2 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpo-usuarios-empresa-saas" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: editar usuario -->
+    <div id="modal-editar-usuario-saas"
+      class="hidden fixed inset-0 z-[1002] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl">
+        <h3 class="text-2xl font-black text-slate-800 mb-1">Editar usuario</h3>
+        <p id="editar-usuario-saas-username" class="text-sm text-slate-500 mb-5">—</p>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Nombre</label>
+            <input type="text" id="editar-usuario-saas-nombre"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Nueva contraseña (opcional)</label>
+            <input type="password" id="editar-usuario-saas-password" placeholder="Dejar vacío para no cambiar"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Estado</label>
+            <select id="editar-usuario-saas-activo"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+              <option value="true">Activo</option>
+              <option value="false">Inactivo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button type="button" onclick="cerrarModalEditarUsuarioSaas()"
+            class="flex-1 rounded-2xl border border-slate-300 py-3 font-semibold text-slate-700">
+            Cancelar
+          </button>
+          <button type="button" onclick="guardarEdicionUsuarioSaas()"
+            class="flex-1 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white py-3 font-bold transition">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+            <!-- ===================================== -->
+            <!-- PLANIFICACIÓN BLOQUEADA (sin sesión) -->
+            <!-- ===================================== -->
+
+            <div id="planificacion-bloqueada"
+              class="hidden card p-6 md:p-8 min-h-full flex flex-col items-center justify-center text-center">
+              <div class="w-20 h-20 rounded-3xl bg-amber-100 flex items-center justify-center mb-6">
+                <span class="material-symbols-outlined text-5xl text-amber-500">lock</span>
+              </div>
+
+              <h3 class="section-title text-2xl mb-2">
+                Inicia sesión para ver la planificación
+              </h3>
+
+              <p class="text-slate-500 mb-8 max-w-md font-500">
+                La planificación de turnos es solo para usuarios autenticados.
+                Inicia sesión para consultar y modificar el calendario del equipo.
+              </p>
+
+              <button onclick="iniciarSesion()"
+                class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition flex items-center gap-2">
+                <span class="material-symbols-outlined text-xl">login</span>
+                Iniciar sesión
+              </button>
             </div>
 
             <!-- ===================================== -->
@@ -655,6 +1045,25 @@
                       Volver
                     </button>
 
+                    <!-- DESCARGAR PLANTILLA -->
+                    <button onclick="descargarPlantillaCSV()"
+                      class="px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">
+                        download
+                      </span>Plantilla CSV
+                    </button>
+
+                    <!-- CARGA MASIVA CSV -->
+                    <button onclick="document.getElementById('input-csv').click()"
+                      class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">
+                        upload_file
+                      </span>Carga masiva CSV
+                    </button>
+
+                    <input type="file" id="input-csv" accept=".csv,text/csv" class="hidden"
+                      onchange="manejarArchivoCSV(this)" />
+
                     <!-- NUEVO -->
                     <button onclick="nuevoTrabajador()"
                       class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
@@ -667,30 +1076,47 @@
                 </div>
 
                 <!-- FILTROS -->
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
-                  <!-- AREA -->
-                  <div>
-                    <select onchange="aplicarFiltrosTrabajadores()" id="filtro-area"
-                      class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option value="">Todas las áreas</option>
-                    </select>
-                  </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-4">
+                  <label class="relative block xl:col-span-2">
+                    <span class="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                      search
+                    </span>
+                    <input id="busqueda-trabajadores" type="search" oninput="aplicarFiltrosTrabajadores()"
+                      placeholder="Buscar por nombre, RUT, responsable, área, CECO o cargo"
+                      class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                  </label>
 
-                  <!-- CECO -->
-                  <div>
-                    <select onchange="aplicarFiltrosTrabajadores()" id="filtro-ceco"
-                      class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option value="">Todos los CECO</option>
-                    </select>
-                  </div>
+                  <button onclick="limpiarFiltrosTrabajadores()"
+                    class="w-full px-4 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition">
+                    Limpiar filtros
+                  </button>
 
-                  <!-- LIMPIAR -->
-                  <div>
-                    <button onclick="limpiarFiltrosTrabajadores()"
-                      class="w-full px-4 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition">
-                      Limpiar
-                    </button>
-                  </div>
+                  <select onchange="aplicarFiltrosTrabajadores()" id="filtro-estado"
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Todos los estados</option>
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                  </select>
+
+                  <select onchange="aplicarFiltrosTrabajadores()" id="filtro-cargo"
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Todos los cargos</option>
+                  </select>
+
+                  <select onchange="aplicarFiltrosTrabajadores()" id="filtro-responsable"
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Todos los responsables</option>
+                  </select>
+
+                  <select onchange="aplicarFiltrosTrabajadores()" id="filtro-area"
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Todas las áreas</option>
+                  </select>
+
+                  <select onchange="aplicarFiltrosTrabajadores()" id="filtro-ceco"
+                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Todos los CECO</option>
+                  </select>
                 </div>
 
                 <!-- TABLA -->
@@ -749,6 +1175,7 @@
                           class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
                           <option value="ceco">CECO</option>
                           <option value="area">Área</option>
+                          <option value="cargo">Cargo</option>
                         </select>
                       </div>
 
@@ -759,7 +1186,7 @@
                         </select>
                       </div>
 
-                      <div>
+                      <div class="md:col-span-2">
                         <label class="block text-sm font-semibold mb-2 text-slate-700">Día</label>
                         <select id="cobertura-dia"
                           class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
@@ -774,20 +1201,26 @@
                       </div>
 
                       <div>
-                        <label class="block text-sm font-semibold mb-2 text-slate-700">Mínimo personas</label>
-                        <input type="number" min="1" id="cobertura-minimo" value="1"
-                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
-                      </div>
-
-                      <div>
                         <label class="block text-sm font-semibold mb-2 text-slate-700">Inicio cobertura</label>
                         <input type="time" id="cobertura-inicio" value="09:00"
                           class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                       </div>
 
                       <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Mín. personas inicio</label>
+                        <input type="number" min="1" id="cobertura-minimo-inicio" value="1"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
                         <label class="block text-sm font-semibold mb-2 text-slate-700">Fin cobertura</label>
                         <input type="time" id="cobertura-fin" value="05:00"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Mín. personas fin</label>
+                        <input type="number" min="1" id="cobertura-minimo-fin" value="1"
                           class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                       </div>
                     </div>
@@ -820,7 +1253,7 @@
                             <th class="p-3 text-left">Área / CECO</th>
                             <th class="p-3 text-left">Día</th>
                             <th class="p-3 text-left">Horario</th>
-                            <th class="p-3 text-center">Mín.</th>
+                            <th class="p-3 text-center">Mín. Inicio / Fin</th>
                             <th class="p-3 text-center">Estado</th>
                             <th class="p-3 text-center">Acciones</th>
                           </tr>
@@ -838,50 +1271,174 @@
                   </div>
                 </div>
               </div>
+
+              <div class="card p-6 md:p-8 mt-6">
+                <div class="mb-6">
+                  <h2 class="text-3xl font-black text-slate-800">
+                    Colación por CECO
+                  </h2>
+                  <p class="text-slate-500 mt-2">
+                    Minutos de colación a descontar por cada turno trabajado. Los CECO sin
+                    configuración usan el valor por defecto (60 min Seguridad / 30 min el resto).
+                  </p>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-5 gap-6">
+                  <div class="2xl:col-span-2 border border-slate-200 rounded-2xl p-5 bg-slate-50">
+                    <h3 class="font-black text-slate-800 mb-4">
+                      Asignar colación
+                    </h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">CECO</label>
+                        <select id="colacion-ceco"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Minutos</label>
+                        <input type="number" min="0" max="480" step="5" id="colacion-minutos" value="30"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3 mt-5">
+                      <button onclick="guardarColacionCeco()"
+                        class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[20px]">save</span>
+                        Guardar colación
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="2xl:col-span-3">
+                    <label class="relative block mb-4">
+                      <span class="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                        search
+                      </span>
+                      <input id="busqueda-usuarios" type="search" oninput="renderizarUsuarios()"
+                        placeholder="Buscar por nombre, usuario o estado"
+                        class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                    </label>
+
+                    <div class="overflow-auto rounded-2xl border border-slate-200">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th class="p-3 text-left">CECO</th>
+                            <th class="p-3 text-center">Minutos</th>
+                            <th class="p-3 text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody id="tabla-colacion-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===================================== -->
+            <!-- VISTA USUARIOS -->
+            <!-- ===================================== -->
+
+            <div id="vista-usuarios" class="hidden mt-6">
+              <div class="card p-6 md:p-8">
+                <!-- HEADER -->
+                <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                  <div>
+                    <h2 class="text-3xl font-black text-slate-800">
+                      Usuarios
+                    </h2>
+                    <p class="text-slate-500 mt-2">
+                      Cuentas con acceso a la administración del sistema.
+                    </p>
+                  </div>
+
+                  <button onclick="volverPlanificacion()"
+                    class="px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+                    Volver
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-5 gap-6">
+                  <!-- FORM NUEVO USUARIO -->
+                  <div class="2xl:col-span-2 border border-slate-200 rounded-2xl p-5 bg-slate-50">
+                    <h3 class="font-black text-slate-800 mb-4">
+                      Nuevo usuario
+                    </h3>
+
+                    <div class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Nombre para mostrar</label>
+                        <input type="text" id="usuario-nuevo-nombre" placeholder="Ej. María González"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Usuario</label>
+                        <input type="text" id="usuario-nuevo-username" placeholder="usuario" autocomplete="off"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">Contraseña</label>
+                        <input type="password" id="usuario-nuevo-password" placeholder="Contraseña" autocomplete="new-password"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                      </div>
+                    </div>
+
+                    <button onclick="guardarUsuarioNuevo()"
+                      class="mt-5 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">person_add</span>
+                      Crear usuario
+                    </button>
+                  </div>
+
+                  <!-- TABLA USUARIOS -->
+                  <div class="2xl:col-span-3">
+                    <div class="overflow-auto rounded-2xl border border-slate-200">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th class="p-3 text-left">Nombre</th>
+                            <th class="p-3 text-left">Usuario</th>
+                            <th class="p-3 text-center">Estado</th>
+                            <th class="p-3 text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody id="tabla-usuarios-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <!-- RIGHT PANEL -->
           <div id="right-panel"
             class="xl:col-span-3 min-w-0 transition-all duration-300 grid grid-cols-1 sm:grid-cols-2 xl:flex xl:flex-col gap-5 content-start xl:h-full xl:overflow-hidden">
             <!-- HORAS STAT -->
-            <div class="stat-card xl:flex-none" style="
-                  background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
-                  box-shadow: 0 10px 36px rgba(59, 110, 248, 0.35);
-                ">
-              <button type="button" onclick="generarPlanificacionAutomatica()"
-                class="relative z-10 flex items-center justify-between w-full text-left cursor-pointer hover:scale-[1.02] transition-all duration-200">
-                <div>
-                  <p class="text-blue-100/80 text-xs font-700 uppercase tracking-widest mb-2">
-                    Generar
-                  </p>
-                  <h3 id="total-horas" class="stat-number">
-                    Planificación Automática
-                  </h3>
-                </div>
-
-                <span
-                  class="material-symbols-outlined text-white/30 transition-all duration-300 group-hover:text-white/60 group-hover:scale-110"
-                  style="font-size: 56px">
-                  smart_toy
-                </span>
-              </button>
-            </div>
-
-            <!-- TRABAJADORES STAT -->
-            <div class="stat-card xl:flex-none" style="
-                  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-                  box-shadow: 0 10px 36px rgba(16, 185, 129, 0.3);
-                ">
-              <div class="relative z-10 flex items-center justify-between">
-                <div>
-                  <p class="text-emerald-100/80 text-xs font-700 uppercase tracking-widest mb-2">
-                    Trabajadores
-                  </p>
-                  <h3 id="total-trabajadores" class="stat-number">0</h3>
-                </div>
-                <span class="material-symbols-outlined text-white/30" style="font-size: 56px">groups</span>
+            <button type="button" onclick="generarPlanificacionAutomatica()"
+              class="stat-card xl:flex-none flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:scale-[1.02] transition-all duration-200"
+              style="
+                background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
+                box-shadow: 0 6px 20px rgba(59, 110, 248, 0.35);
+              ">
+              <span class="material-symbols-outlined text-white/80 shrink-0" style="font-size: 28px">smart_toy</span>
+              <div class="min-w-0">
+                <p class="text-blue-100/90 text-[10px] font-bold uppercase tracking-widest leading-none mb-1">
+                  Generar
+                </p>
+                <p id="total-horas" class="text-white font-black text-sm leading-tight truncate">
+                  Planificación automática
+                </p>
               </div>
-            </div>
+            </button>
+
 
             <!-- ALERTAS CARD -->
             <div id="card-alertas" class="card overflow-hidden xl:flex xl:flex-col xl:flex-1 xl:min-h-0">
@@ -895,7 +1452,7 @@
                   <div class="min-w-0">
                     <h2 class="section-title text-lg">Alertas</h2>
                     <p class="text-slate-400 text-xs font-500 mt-0.5 truncate">
-                      Conflictos de descanso
+                      Cobertura, descanso y horas
                     </p>
                   </div>
                 </div>
@@ -910,16 +1467,16 @@
               </div>
             </div>
 
-            <!-- DOMINGOS CARD -->
+            <!-- INDICADORES CARD -->
             <div id="card-domingos" class="card overflow-hidden xl:flex xl:flex-col xl:flex-1 xl:min-h-0">
               <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3 shrink-0">
                 <div class="icon-box w-10 h-10" style="background: #fef9ee">
-                  <span class="material-symbols-outlined text-xl" style="color: #f59e0b">calendar_month</span>
+                  <span class="material-symbols-outlined text-xl" style="color: #f59e0b">monitoring</span>
                 </div>
                 <div>
-                  <h2 class="section-title text-lg">Domingos</h2>
+                  <h2 class="section-title text-lg">Carga mensual</h2>
                   <p class="text-slate-400 text-xs font-500 mt-0.5">
-                    Resumen de turnos y días libres
+                    Sobrecarga, nocturnos, domingos y libres
                   </p>
                 </div>
               </div>
@@ -929,8 +1486,58 @@
           </div>
         </div>
       </div>
+
+      <!-- ===================================== -->
+      <!-- VISTA ALERTAS -->
+      <!-- ===================================== -->
+
+      <div id="vista-alertas" class="hidden card p-6 md:p-8 min-h-full max-h-full overflow-y-auto">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
+          <div>
+            <h2 class="text-3xl font-black text-slate-800">Alertas</h2>
+            <p class="text-slate-500 mt-2">
+              Conflictos de cobertura, descanso y horas que requieren tu atención.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <span id="badge-alertas-vista"
+              class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+              0 alertas
+            </span>
+            <button type="button" onclick="mostrarVistaCobertura()"
+              class="px-4 py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+              <span class="material-symbols-outlined text-lg">rule</span>
+              Ir a Cobertura
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button type="button" data-filtro-alerta="todos"
+            class="filtro-alerta px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-bold">
+            Todas
+          </button>
+          <button type="button" data-filtro-alerta="cobertura"
+            class="filtro-alerta px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+            Cobertura
+          </button>
+          <button type="button" data-filtro-alerta="descanso"
+            class="filtro-alerta px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+            Descanso
+          </button>
+          <button type="button" data-filtro-alerta="horas"
+            class="filtro-alerta px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+            Horas
+          </button>
+        </div>
+
+        <div id="contenedor-alertas-vista"
+          class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      </div>
     </main>
   </div>
+
 
   <!-- TURNOS DATALIST (sin cambios) -->
   <datalist id="turnos">
@@ -951,6 +1558,7 @@
   <script src="js/resumen.js"></script>
   <script src="js/cobertura.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/motor_asignacion.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
@@ -958,8 +1566,11 @@
   <script src="js/pdf.js"></script>
 
   <script src="js/admin/auth.js"></script>
+  <script src="js/admin/saas-admin.js"></script>
+  <script src="js/admin/usuarios.js"></script>
   <script src="js/admin/modal.js"></script>
   <script src="js/admin/trabajadores.js"></script>
+  <script src="js/admin/importar.js"></script>
   <script src="js/admin/crud.js"></script>
 
   <!-- SCRIPTS (sin cambios en lógica) -->
@@ -991,11 +1602,12 @@
       const main = document.getElementById("main-content");
 
       if (!rightPanelCollapsed) {
-        panel.classList.add("hidden");
+        // Inline display:none para ganar sobre `xl:flex` / `grid` de la clase.
+        panel.style.display = "none";
         main.classList.remove("xl:col-span-9");
         main.classList.add("xl:col-span-12");
       } else {
-        panel.classList.remove("hidden");
+        panel.style.display = "";
         main.classList.remove("xl:col-span-12");
         main.classList.add("xl:col-span-9");
       }
@@ -1020,13 +1632,24 @@
           </span>
         </div>
 
-        <h2 class="text-3xl font-black text-slate-800">Acceso Admin</h2>
+        <h2 class="text-3xl font-black text-slate-800">Iniciar sesión</h2>
 
-        <p class="text-slate-500 mt-2">Ingrese contraseña administrador</p>
+        <p class="text-slate-500 mt-2">Empresa (opcional para SaaS admin), usuario y contraseña</p>
       </div>
 
-      <input type="password" id="password-admin" placeholder="Contraseña"
-        class="w-full rounded-2xl border border-slate-300 px-5 py-4 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
+      <select id="empresa-admin"
+        onkeydown="if(event.key==='Enter'){ document.getElementById('usuario-admin').focus() }"
+        class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500">
+        <option value="">— Empresa (opcional) —</option>
+      </select>
+
+      <input type="text" id="usuario-admin" placeholder="Usuario" autocomplete="username"
+        onkeydown="if(event.key==='Enter'){ document.getElementById('password-admin').focus() }"
+        class="w-full mt-3 rounded-2xl border border-slate-300 px-5 py-4 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
+
+      <input type="password" id="password-admin" placeholder="Contraseña" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter'){ validarAdmin() }"
+        class="w-full mt-3 rounded-2xl border border-slate-300 px-5 py-4 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
 
       <button onclick="validarAdmin()"
         class="w-full mt-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white py-4 font-bold transition">
@@ -1041,14 +1664,107 @@
   </div>
 
   <!-- ===================================== -->
-  <!-- MODAL TRABAJADOR -->
+  <!-- MODAL CREDENCIALES GENERADAS           -->
+  <!-- ===================================== -->
+  <!-- Se muestra UNA sola vez cuando el super-admin crea una empresa y
+       el backend autogenera las credenciales del primer administrador.
+       Es la única oportunidad de ver la contraseña en claro: si el
+       cliente la pierde, hay que resetearla desde el panel de usuarios. -->
+
+  <div id="modal-credenciales-admin"
+    class="hidden fixed inset-0 z-[1001] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl">
+      <div class="text-center mb-6">
+        <div class="w-20 h-20 rounded-3xl bg-emerald-100 flex items-center justify-center mx-auto mb-5">
+          <span class="material-symbols-outlined text-5xl text-emerald-600">
+            key
+          </span>
+        </div>
+        <h2 class="text-2xl font-black text-slate-800">
+          Empresa creada
+        </h2>
+        <p class="text-slate-500 mt-2 text-sm">
+          Credenciales del primer administrador. Se muestran <strong>una sola vez</strong>:
+          cópialas y entrégaselas al cliente de forma segura.
+        </p>
+      </div>
+
+      <!-- Empresa -->
+      <div class="rounded-2xl bg-slate-50 p-4 mb-4">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+          Empresa
+        </p>
+        <p id="credencial-empresa-nombre" class="font-black text-slate-800 text-lg">
+          —
+        </p>
+        <p id="credencial-empresa-slug" class="text-xs font-mono text-slate-500 mt-0.5">
+          —
+        </p>
+      </div>
+
+      <!-- Usuario -->
+      <div class="rounded-2xl border border-slate-200 p-4 mb-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+              Usuario
+            </p>
+            <p id="credencial-username" class="font-mono font-bold text-slate-800 break-all">
+              —
+            </p>
+          </div>
+          <button type="button" onclick="copiarCredencial('credencial-username', this)"
+            class="copiar-btn flex-shrink-0 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 transition">
+            <span class="material-symbols-outlined text-base">content_copy</span>
+            Copiar
+          </button>
+        </div>
+      </div>
+
+      <!-- Contraseña -->
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-bold uppercase tracking-widest text-amber-700 mb-1">
+              Contraseña (solo esta vez)
+            </p>
+            <p id="credencial-password" class="font-mono font-bold text-slate-800 break-all">
+              —
+            </p>
+          </div>
+          <button type="button" onclick="copiarCredencial('credencial-password', this)"
+            class="copiar-btn flex-shrink-0 px-3 py-2 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold text-xs flex items-center gap-1 transition">
+            <span class="material-symbols-outlined text-base">content_copy</span>
+            Copiar
+          </button>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4 mb-5 text-sm text-blue-900">
+        <p class="font-bold mb-1">¿Cómo se usa esto?</p>
+        <ol class="list-decimal list-inside space-y-1 text-blue-800">
+          <li>Copia las credenciales.</li>
+          <li>Entrégalas al cliente por un canal seguro.</li>
+          <li>Pídele que cambie la contraseña en su primer inicio de sesión.</li>
+        </ol>
+      </div>
+
+      <button onclick="cerrarModalCredenciales()"
+        class="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 text-white py-4 font-bold transition">
+        Ya las copié, cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL TRABAJADOR                     -->
   <!-- ===================================== -->
 
   <div id="modal-trabajador"
     class="hidden fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden">
+    <div class="bg-white rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
       <!-- HEADER -->
-      <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+      <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
         <div>
           <h2 id="titulo-modal-trabajador" class="text-3xl font-black text-slate-800">
             Nuevo Trabajador
@@ -1065,8 +1781,8 @@
         </button>
       </div>
 
-      <!-- BODY -->
-      <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- BODY (scrollable para que entre en pantalla con los 7 turnos fijos) -->
+      <div class="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-5 overflow-y-auto flex-1">
         <!-- ID -->
         <input type="hidden" id="trabajador-id" />
 
@@ -1171,10 +1887,126 @@
             </span>
           </label>
         </div>
+
+        <!-- ACTIVO -->
+        <div class="md:col-span-2">
+          <label
+            class="flex items-center gap-3 cursor-pointer select-none rounded-2xl border border-slate-300 px-5 py-4 hover:bg-slate-50 transition">
+            <input type="checkbox" id="trabajador-activo" checked
+              class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span class="text-sm font-semibold text-slate-700">
+              Trabajador activo
+              <span class="block text-xs font-normal text-slate-400 mt-0.5">
+                Si lo desactivas, no aparecerá en el planificador para asignarle horario.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- TURNO ROTATIVO -->
+        <div class="md:col-span-2">
+          <label
+            class="flex items-center gap-3 cursor-pointer select-none rounded-2xl border border-slate-300 px-5 py-4 hover:bg-slate-50 transition">
+            <input type="checkbox" id="trabajador-turno-rotativo" checked
+              onchange="alternarBloqueTurnoFijo()"
+              class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span class="text-sm font-semibold text-slate-700">
+              Turno rotativo
+              <span class="block text-xs font-normal text-slate-400 mt-0.5">
+                Si lo desactivas, el planificador automático no le asignará ni modificará turnos;
+                sus turnos manuales se conservan tal cual.
+              </span>
+            </span>
+          </label>
+        </div>
+
+<!-- TURNOS FIJOS POR DÍA (visible solo si rotativo=false) -->
+        <div id="bloque-turno-fijo" class="md:col-span-2 hidden">
+          <div class="rounded-2xl border border-slate-300 bg-slate-50 p-4">
+            <div class="mb-2">
+              <p class="text-sm font-semibold text-slate-700">
+                Turnos fijos por día de la semana
+              </p>
+              <p class="mt-0.5 text-xs text-slate-500">
+                Definí un turno distinto para cada día si es necesario. Los
+                días en blanco no se asignan. El sistema respeta los mínimos
+                de cobertura y no sobrecubre.
+              </p>
+            </div>
+            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Lunes
+                </span>
+                <select data-dia-fijo="0" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Martes
+                </span>
+                <select data-dia-fijo="1" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Miércoles
+                </span>
+                <select data-dia-fijo="2" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Jueves
+                </span>
+                <select data-dia-fijo="3" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Viernes
+                </span>
+                <select data-dia-fijo="4" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Sábado
+                </span>
+                <select data-dia-fijo="5" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2 sm:col-span-2 lg:col-span-1">
+                <span class="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Domingo
+                </span>
+                <select data-dia-fijo="6" onchange="actualizarContadorTurnosFijos()"
+                  class="trabajador-turno-fijo-dia flex-1 rounded-lg border border-slate-300 px-2 py-1.5 bg-white text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                  <option value="">— Sin turno —</option>
+                </select>
+              </div>
+            </div>
+            <p id="estado-turnos-fijos" class="mt-2 text-xs font-semibold text-slate-500">
+              Días configurados: <span id="contador-turnos-fijos">0</span> / 7
+            </p>
+          </div>
+        </div>
       </div>
 
-      <!-- FOOTER -->
-      <div class="px-8 py-6 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 flex-wrap">
+      <!-- FOOTER (fijo abajo, no scrollea con el body) -->
+      <div class="px-6 md:px-8 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 flex-wrap flex-shrink-0">
         <button onclick="cerrarModalTrabajador()"
           class="px-6 py-3 rounded-2xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 transition">
           Cancelar
@@ -1183,6 +2015,69 @@
         <button onclick="guardarTrabajador()"
           class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-200 transition">
           Guardar Trabajador
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL CARGA MASIVA CSV -->
+  <!-- ===================================== -->
+  <div id="modal-importar"
+    class="hidden fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <!-- HEADER -->
+      <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h2 class="text-3xl font-black text-slate-800">
+            Carga masiva de colaboradores
+          </h2>
+          <p class="text-slate-500 mt-2">
+            Revisa los datos antes de importar. La validación es por RUT (único): los que ya
+            existen no se vuelven a crear.
+          </p>
+        </div>
+
+        <button onclick="cerrarModalImportar()"
+          class="w-12 h-12 rounded-2xl hover:bg-slate-100 flex items-center justify-center transition">
+          <span class="material-symbols-outlined text-slate-500">close</span>
+        </button>
+      </div>
+
+      <!-- RESUMEN -->
+      <div id="importar-resumen" class="px-8 pt-6 flex flex-wrap gap-3"></div>
+
+      <!-- TABLA -->
+      <div class="px-8 py-4 overflow-auto">
+        <div class="overflow-auto rounded-2xl border border-slate-200">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-700 sticky top-0">
+              <tr>
+                <th class="p-3 text-left">Estado</th>
+                <th class="p-3 text-left">RUT</th>
+                <th class="p-3 text-left">Nombre</th>
+                <th class="p-3 text-center">Jornada</th>
+                <th class="p-3 text-left">Área</th>
+                <th class="p-3 text-left">CECO</th>
+                <th class="p-3 text-left">Responsable</th>
+                <th class="p-3 text-left">Cargo</th>
+              </tr>
+            </thead>
+            <tbody id="importar-tabla-body" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="px-8 py-6 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 flex-wrap">
+        <button onclick="cerrarModalImportar()"
+          class="px-6 py-3 rounded-2xl border border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 transition">
+          Cancelar
+        </button>
+
+        <button id="btn-confirmar-importar" onclick="confirmarImportacion()"
+          class="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          Importar
         </button>
       </div>
     </div>

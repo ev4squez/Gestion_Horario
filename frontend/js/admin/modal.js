@@ -16,97 +16,137 @@ function marcarMenuActivo(idBoton) {
 
 }
 
+// Oculta todas las vistas principales (planificación, cobertura, trabajadores,
+// usuarios, alertas). Cada mostrarVistaX() la usa y luego revela solo la suya.
+// Además oculta el panel derecho: solo es visible dentro de la vista
+// planificación (los stats / alertas de cobertura no aplican a las otras).
+// Helper: muestra una vista. Quita la clase `hidden` y limpia el inline
+// `display` que dejó ocultarTodasLasVistas, dejando que las clases
+// responsivas (p.ej. `xl:flex`) tomen efecto.
+function mostrarVista(id){
+    const vista = document.getElementById(id)
+    if(vista){
+        vista.classList.remove("hidden")
+        vista.style.display = ""
+    }
+}
+
+function ocultarTodasLasVistas() {
+
+    // Usamos `style.display = "none"` inline además de la clase `hidden` para
+    // ganar siempre (la clase `hidden` de Tailwind puede tener conflictos de
+    // especificidad con las clases responsivas del elemento, p.ej. `xl:flex`
+    // en el SaaS view). El inline gana por specificity.
+    [
+        "vista-planificacion",
+        "vista-trabajadores",
+        "vista-cobertura",
+        "vista-usuarios",
+        "vista-alertas",
+        "vista-saas-admin",
+    ].forEach(id => {
+        const vista = document.getElementById(id)
+        if(vista){
+            vista.classList.add("hidden")
+            vista.style.display = "none"
+        }
+    })
+
+    // Ocultar el panel derecho. Usamos `style.display = "none"` inline porque
+    // el panel tiene clases `grid ... xl:flex` que ganan sobre `hidden` por
+    // orden de declaración en el CSS compilado de Tailwind; sin el inline,
+    // el panel quedaba visible y desbordaba a la siguiente fila del grid.
+    const rightPanel = document.getElementById("right-panel")
+    const mainContent = document.getElementById("main-content")
+    if(rightPanel){
+        rightPanel.style.display = "none"
+    }
+    if(mainContent){
+        mainContent.classList.remove("xl:col-span-9")
+        mainContent.classList.add("xl:col-span-12")
+    }
+
+}
+
+// Muestra el panel derecho (stats, alertas, carga mensual) y ajusta el ancho
+// del contenido principal para convivir en el grid 12-cols. También
+// resetea el flag del toggle para que el botón funcione correctamente aunque
+// el usuario haya entrado/salido de la vista en distintas sesiones.
+// Usamos `style.display = ""` para limpiar el inline y dejar que el CSS de
+// clase (`xl:flex`, `grid`) determine cómo se ve.
+function mostrarPanelDerecho(){
+
+    const rightPanel = document.getElementById("right-panel")
+    const mainContent = document.getElementById("main-content")
+
+    if(rightPanel){
+        // El panel tiene class="hidden ..." además del style inline. Hay
+        // que quitar la clase `hidden` y limpiar el style para que el CSS
+        // responsive de Tailwind (xl:flex) defina la visualización.
+        rightPanel.classList.remove("hidden")
+        rightPanel.style.display = ""
+    }
+    if(mainContent){
+        mainContent.classList.remove("xl:col-span-12")
+        mainContent.classList.add("xl:col-span-9")
+    }
+
+    if(typeof rightPanelCollapsed !== "undefined"){
+        rightPanelCollapsed = false
+    }
+
+}
+
+window.busquedaTrabajadores = window.busquedaTrabajadores || ""
+
 function mostrarVistaTrabajadores() {
 
     marcarMenuActivo("menu-colaboradores")
 
-    document
-        .getElementById(
-            "vista-planificacion"
-        )
-        .classList.add(
-            "hidden"
-        )
+    ocultarTodasLasVistas()
 
-    document
-        .getElementById(
-            "vista-trabajadores"
-        )
-        .classList.remove(
-            "hidden"
-        )
-
-    document
-        .getElementById(
-            "vista-cobertura"
-        )
-        .classList.add(
-            "hidden"
-        )
+    mostrarVista("vista-trabajadores")
 
     cargarFiltrosTrabajadores()
 
-    renderizarTrabajadoresCRUD()
+    aplicarFiltrosTrabajadores()
 
 }
 
 function mostrarVistaPlanificacion() {
 
+    // La planificación ahora exige sesión: el backend rechaza GET/POST sin
+    // token, así que el cliente también bloquea el render hasta loguearse.
+    if(!(adminAutorizado && obtenerToken())){
+        iniciarSesion()
+        return
+    }
+
     marcarMenuActivo("menu-planificacion")
 
-    document
-        .getElementById(
-            "vista-planificacion"
-        )
-        .classList.remove(
-            "hidden"
-        )
+    ocultarTodasLasVistas()
 
-    document
-        .getElementById(
-            "vista-trabajadores"
-        )
-        .classList.add(
-            "hidden"
-        )
+    mostrarVista("vista-planificacion")
 
-    document
-        .getElementById(
-            "vista-cobertura"
-        )
-        .classList.add(
-            "hidden"
-        )
+    // El panel derecho (stats + alertas + carga mensual) solo se muestra
+    // dentro de la vista planificación.
+    mostrarPanelDerecho()
 
 }
 
 function mostrarVistaCobertura() {
 
+    // Cobertura solo está disponible con sesión iniciada.
+    if(!(adminAutorizado && obtenerToken())){
+        iniciarSesion()
+        return
+    }
+
     marcarMenuActivo("menu-cobertura")
 
-    document
-        .getElementById(
-            "vista-planificacion"
-        )
-        .classList.add(
-            "hidden"
-        )
+    ocultarTodasLasVistas()
 
-    document
-        .getElementById(
-            "vista-trabajadores"
-        )
-        .classList.add(
-            "hidden"
-        )
-
-    document
-        .getElementById(
-            "vista-cobertura"
-        )
-        .classList.remove(
-            "hidden"
-        )
+    mostrarVista("vista-cobertura")
 
     if(typeof renderizarCobertura === "function"){
         renderizarCobertura()
@@ -114,49 +154,96 @@ function mostrarVistaCobertura() {
 
 }
 
+function mostrarVistaAlertas(){
+
+    // Alertas solo está disponible con sesión iniciada.
+    if(!(adminAutorizado && obtenerToken())){
+        iniciarSesion()
+        return
+    }
+
+    marcarMenuActivo("menu-alertas")
+
+    ocultarTodasLasVistas()
+
+    mostrarVista("vista-alertas")
+
+    if(typeof renderizarAlertasVista === "function"){
+        renderizarAlertasVista()
+    }
+
+}
+
 function aplicarFiltrosTrabajadores() {
 
-    const area =
-        document
-            .getElementById("filtro-area")
-            .value
-            .toLowerCase()
-
-    const ceco =
-        document
-            .getElementById("filtro-ceco")
-            .value
-            .toLowerCase()
-
     const filtrados =
-        trabajadoresGlobal.filter(t => {
-
-            const areaTrabajador =
-                (t.area || "")
-                    .toLowerCase()
-
-            const cecoTrabajador =
-                (t.ceco || "")
-                    .toLowerCase()
-
-            const coincideArea =
-                !area ||
-                areaTrabajador === area
-
-            const coincideCeco =
-                !ceco ||
-                cecoTrabajador === ceco
-
-            return (
-                coincideArea &&
-                coincideCeco
-            )
-
-        })
+        filtrarTrabajadoresCRUD(
+            trabajadoresGlobal
+        )
 
     renderizarTrabajadoresCRUD(
         filtrados
     )
+
+}
+
+function filtrarTrabajadoresCRUD(lista){
+
+    const texto =
+        normalizarTexto(
+            document.getElementById("busqueda-trabajadores")?.value
+        )
+
+    const estado =
+        normalizarTexto(
+            document.getElementById("filtro-estado")?.value
+        )
+
+    const cargo =
+        normalizarTexto(
+            document.getElementById("filtro-cargo")?.value
+        )
+
+    const responsable =
+        normalizarTexto(
+            document.getElementById("filtro-responsable")?.value
+        )
+
+    const area =
+        normalizarTexto(
+            document.getElementById("filtro-area")?.value
+        )
+
+    const ceco =
+        normalizarTexto(
+            document.getElementById("filtro-ceco")?.value
+        )
+
+    return (lista || []).filter(t => {
+
+        if(estado === "activo" && t.activo === false){ return false }
+        if(estado === "inactivo" && t.activo !== false){ return false }
+
+        if(cargo && normalizarTexto(t.cargo) !== cargo){ return false }
+        if(responsable && normalizarTexto(t.responsable) !== responsable){ return false }
+        if(area && normalizarTexto(t.area) !== area){ return false }
+        if(ceco && normalizarTexto(t.ceco) !== ceco){ return false }
+
+        if(!texto){ return true }
+
+        const searchable = [
+            t.nombre,
+            t.responsable,
+            t.area,
+            t.ceco,
+            t.cargo,
+            t.rut,
+            t.activo === false ? "inactivo" : "activo"
+        ].map(normalizarTexto).join(" | ")
+
+        return searchable.includes(texto)
+
+    })
 
 }
 
@@ -178,6 +265,32 @@ function cargarFiltrosTrabajadores() {
         )
     ]
 
+    const cargos = [
+        ...new Set(
+            trabajadoresGlobal.map(
+                t => t.cargo
+            )
+        )
+    ]
+
+    const responsables = [
+        ...new Set(
+            trabajadoresGlobal.flatMap(t => [
+                t.responsable,
+                t.nombre
+            ])
+        )
+    ]
+
+    const selectEstado =
+        document.getElementById("filtro-estado")
+
+    const selectCargo =
+        document.getElementById("filtro-cargo")
+
+    const selectResponsable =
+        document.getElementById("filtro-responsable")
+
     const selectArea =
         document.getElementById(
             "filtro-area"
@@ -188,7 +301,75 @@ function cargarFiltrosTrabajadores() {
             "filtro-ceco"
         )
 
+    if (selectEstado) {
+
+        const actual = selectEstado.value
+
+        selectEstado.innerHTML = `
+            <option value="">
+                Todos los estados
+            </option>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+        `
+
+        selectEstado.value = actual
+
+    }
+
+    if (selectCargo) {
+
+        const actual = selectCargo.value
+
+        selectCargo.innerHTML = `
+            <option value="">
+                Todos los cargos
+            </option>
+        `
+
+        cargos
+            .filter(v => v && v.trim() !== "")
+            .sort()
+            .forEach(cargo => {
+                selectCargo.innerHTML += `
+                    <option value="${escaparHTML(cargo)}">
+                        ${escaparHTML(cargo)}
+                    </option>
+                `
+            })
+
+        selectCargo.value = actual
+
+    }
+
+    if (selectResponsable) {
+
+        const actual = selectResponsable.value
+
+        selectResponsable.innerHTML = `
+            <option value="">
+                Todos los responsables
+            </option>
+        `
+
+        responsables
+            .filter(v => v && v.trim() !== "")
+            .sort()
+            .forEach(responsable => {
+                selectResponsable.innerHTML += `
+                    <option value="${escaparHTML(responsable)}">
+                        ${escaparHTML(responsable)}
+                    </option>
+                `
+            })
+
+        selectResponsable.value = actual
+
+    }
+
     if (selectArea) {
+
+        const actual = selectArea.value
 
         selectArea.innerHTML = `
             <option value="">
@@ -196,19 +377,26 @@ function cargarFiltrosTrabajadores() {
             </option>
         `
 
-        areas.forEach(area => {
+        areas
+            .filter(v => v && v.trim() !== "")
+            .sort()
+            .forEach(area => {
 
-            selectArea.innerHTML += `
-                <option value="${escaparHTML(area)}">
-                    ${escaparHTML(area)}
-                </option>
-            `
+                selectArea.innerHTML += `
+                    <option value="${escaparHTML(area)}">
+                        ${escaparHTML(area)}
+                    </option>
+                `
 
-        })
+            })
+
+        selectArea.value = actual
 
     }
 
     if (selectCeco) {
+
+        const actual = selectCeco.value
 
         selectCeco.innerHTML = `
             <option value="">
@@ -216,21 +404,46 @@ function cargarFiltrosTrabajadores() {
             </option>
         `
 
-        cecos.forEach(ceco => {
+        cecos
+            .filter(v => v && v.trim() !== "")
+            .sort()
+            .forEach(ceco => {
 
-            selectCeco.innerHTML += `
-                <option value="${escaparHTML(ceco)}">
-                    ${escaparHTML(ceco)}
-                </option>
-            `
+                selectCeco.innerHTML += `
+                    <option value="${escaparHTML(ceco)}">
+                        ${escaparHTML(ceco)}
+                    </option>
+                `
 
-        })
+            })
+
+        selectCeco.value = actual
 
     }
 
 }
 
 function limpiarFiltrosTrabajadores() {
+
+    const buscador =
+        document.getElementById("busqueda-trabajadores")
+
+    if(buscador){ buscador.value = "" }
+
+    const selectEstado =
+        document.getElementById("filtro-estado")
+
+    if(selectEstado){ selectEstado.value = "" }
+
+    const selectCargo =
+        document.getElementById("filtro-cargo")
+
+    if(selectCargo){ selectCargo.value = "" }
+
+    const selectResponsable =
+        document.getElementById("filtro-responsable")
+
+    if(selectResponsable){ selectResponsable.value = "" }
 
     document.getElementById(
         "filtro-area"
@@ -260,6 +473,17 @@ function renderizarTrabajadoresCRUD(
         return
     }
 
+    if(lista.length === 0){
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="p-5 text-center text-slate-400">
+                    Sin coincidencias
+                </td>
+            </tr>
+        `
+        return
+    }
+
     let html = ""
 
     lista.forEach(t => {
@@ -285,16 +509,12 @@ function renderizarTrabajadoresCRUD(
 
                 <td class="p-4 text-center">
 
-                    <span class="
-                        px-3
-                        py-1
-                        rounded-full
-                        bg-green-100
-                        text-green-700
-                        text-xs
-                        font-bold
-                    ">
-                        ACTIVO
+                    <span class="px-3 py-1 rounded-full text-xs font-bold ${
+                        t.activo === false
+                            ? "bg-slate-100 text-slate-500"
+                            : "bg-green-100 text-green-700"
+                    }">
+                        ${t.activo === false ? "INACTIVO" : "ACTIVO"}
                     </span>
 
                 </td>
@@ -371,3 +591,76 @@ function cerrarModalTrabajador() {
 
 // nuevoTrabajador() y guardarTrabajador() están implementados en
 // admin/trabajadores.js (operan contra la API).
+
+function mostrarVistaSaasAdmin(){
+
+    // Guard defensivo: si el usuario no es super-admin, redirigir a
+    // planificación en vez de mostrar la vista. Cubre el caso de un
+    // localStorage con valor stale (ya no debería pasar con sessionStorage,
+    // pero por las dudas).
+    if(typeof obtenerEsSuperAdmin !== "function" || !obtenerEsSuperAdmin()){
+        if(typeof obtenerToken !== "function" || !obtenerToken()){
+            iniciarSesion()
+        }else{
+            // Usuario logueado pero no es super-admin: redirect a planificación
+            // y mostrar el mensaje una sola vez.
+            mostrarVistaPlanificacion()
+            alert("Esta sección requiere permisos de super-admin. Si tu cuenta ES de super-admin, abre la consola del navegador (F12) y ejecuta: sessionStorage.getItem('authEsSuperAdmin') — debería devolver '1'. Si devuelve null, vuelve a iniciar sesión como super-admin.")
+        }
+        return
+    }
+
+    marcarMenuActivo("menu-saas-admin")
+
+    // Defensa: cerrar cualquier modal que haya quedado abierto de una
+    // sesión anterior (modal de login, etc.) para que no tape el overlay
+    // de la vista SaaS Admin.
+    if(typeof cerrarModalAdmin === "function"){ cerrarModalAdmin() }
+    if(typeof cerrarModalCredenciales === "function"){ cerrarModalCredenciales() }
+
+    ocultarTodasLasVistas()
+
+    mostrarVista("vista-saas-admin")
+
+    // Activar modo dedicado: oculta sidebar, header principal y panel
+    // derecho. El CSS en <style> muestra el header SAAS dedicado.
+    document.body.classList.add("modo-saas")
+
+    // DEBUG: ayuda a diagnosticar si la vista no aparece.
+    console.log("[SAAS Admin] modo-saas aplicado. Si no ves la vista, ejecuta en consola: document.body.classList.contains('modo-saas')")
+
+    // Pintar el username del super-admin en el header dedicado.
+    const ctx = (typeof window.__ctxSesion === "function") ? window.__ctxSesion() : null
+    const userSpan = document.getElementById("saas-actor-username")
+    if(userSpan && ctx && ctx.username){
+        userSpan.textContent = ctx.username
+    }
+
+    if(typeof renderizarSaasAdmin === "function"){
+        renderizarSaasAdmin()
+    }
+
+}
+
+function salirModoSaas(){
+
+    // Sale del modo fullscreen: oculta la vista SAAS (que ahora es
+    // overlay absoluto) y vuelve a la vista de planificación.
+    document.body.classList.remove("modo-saas")
+
+    // Como la vista SAAS Admin es `position:fixed` en modo-saas,
+    // tenemos que ocultar su display inline cuando salimos del modo
+    // (de lo contrario queda "pegada" en pantalla porque las clases
+    // responsivas no la ocultan). La vista-volverPlanificacion()
+    // se encarga luego de mostrarla correctamente.
+    const vista = document.getElementById("vista-saas-admin")
+    if(vista){
+        vista.classList.add("hidden")
+        vista.style.display = "none"
+    }
+
+    if(typeof mostrarVistaPlanificacion === "function"){
+        mostrarVistaPlanificacion()
+    }
+
+}

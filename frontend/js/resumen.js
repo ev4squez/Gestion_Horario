@@ -1,10 +1,41 @@
-// Colación (descanso de comida) a descontar por cada turno trabajado.
-// Regla: 1 hora para el CECO de Seguridad, 30 minutos para el resto.
-function colacionPorCeco(ceco){
+// Configuración de minutos de colación por CECO (se carga del backend en
+// cargarSistema). Cada elemento: { id, ceco, minutos }. Vacío = usar defaults.
+let colacionConfigGlobal = []
+
+// Minutos de colación por defecto cuando el CECO no tiene configuración propia.
+function colacionMinutosPorDefecto(ceco){
 
     const texto = (ceco || "").trim().toLowerCase()
 
-    return texto === "seguridad" ? 1 : 0.5
+    return texto === "seguridad" ? 60 : 30
+
+}
+
+// Minutos de colación asignados a un CECO. Si existe configuración guardada se
+// usa ese valor; si no, cae a la regla por defecto (60 seguridad / 30 resto).
+function colacionMinutosPorCeco(ceco){
+
+    const texto = (ceco || "").trim().toLowerCase()
+
+    const config =
+        (colacionConfigGlobal || []).find(
+            c => String(c.ceco || "").trim().toLowerCase() === texto
+        )
+
+    if(config && Number.isFinite(config.minutos)){
+        return config.minutos
+    }
+
+    return colacionMinutosPorDefecto(ceco)
+
+}
+
+// Colación (descanso de comida) a descontar por cada turno trabajado, en HORAS
+// (los cálculos de jornada trabajan en horas). Deriva de los minutos asignados
+// al CECO, configurables por el usuario en la vista Cobertura.
+function colacionPorCeco(ceco){
+
+    return colacionMinutosPorCeco(ceco) / 60
 
 }
 
@@ -171,6 +202,10 @@ function crearCelda(
 
             data-fecha="${escaparHTML(fecha)}"
 
+            maxlength="13"
+
+            placeholder="00:00 - 00:00"
+
             class="
                 turno-input
                 w-full
@@ -190,10 +225,16 @@ function crearCelda(
                 ${claseExtra}
             "
 
+            oninput="
+                limpiarErrorFormatoTurno(this);
+            "
+
             onblur="
-                actualizarColor(this);
-                recalcularFila(this);
-                guardarTurno(this);
+                if(validarFormatoTurno(this) !== null){
+                    actualizarColor(this);
+                    recalcularFila(this);
+                    guardarTurno(this);
+                }
             "
 
         >
@@ -203,7 +244,51 @@ function crearCelda(
     `
 }
 
+function actualizarTooltipHorasTurno(input) {
+
+    const fila =
+        input.closest(".fila-trabajador")
+
+    const trabajadorId =
+        fila
+            ? parseInt(fila.dataset.trabajadorId)
+            : null
+
+    const trabajador =
+        trabajadoresGlobal.find(
+            t => t.id === trabajadorId
+        )
+
+    const turno =
+        String(input.value || "").trim()
+
+    const esDiaSinTrabajo =
+        /libre|saliente|vacaciones/i.test(turno)
+
+    const tieneHorario =
+        /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/.test(turno)
+
+    if(!esDiaSinTrabajo && !tieneHorario){
+        input.title = "No se pudo calcular la duración de esta jornada"
+        return
+    }
+
+    const horas =
+        calcularHorasSemana(
+            [turno],
+            colacionPorCeco(
+                trabajador ? trabajador.ceco : ""
+            )
+        )
+
+    input.title =
+        `Horas trabajadas: ${horas} h`
+
+}
+
 function actualizarColor(input) {
+
+    actualizarTooltipHorasTurno(input)
 
     const valor =
         input.value.toLowerCase()
@@ -297,6 +382,222 @@ function calcularDomingosLibres(
 
 }
 
+function resumenFechaISO(fecha){
+
+    return `${fecha.getFullYear()}-${
+        String(fecha.getMonth() + 1).padStart(2,"0")
+    }-${
+        String(fecha.getDate()).padStart(2,"0")
+    }`
+
+}
+
+function resumenTurnoEsLibre(turno){
+
+    return String(turno || "")
+        .trim()
+        .toLowerCase()
+        .includes("libre")
+
+}
+
+function resumenTurnoEsTrabajado(turno){
+
+    const texto =
+        String(turno || "")
+            .trim()
+            .toLowerCase()
+
+    if(
+        !texto ||
+        texto.includes("libre") ||
+        texto.includes("saliente") ||
+        texto.includes("vacaciones")
+    ){
+        return false
+    }
+
+    return /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/
+        .test(texto)
+
+}
+
+function resumenTurnoEsNocturno(turno){
+
+    if(!resumenTurnoEsTrabajado(turno)){ return false }
+
+    const match =
+        String(turno)
+            .match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/)
+
+    if(!match){ return false }
+
+    const inicio =
+        (parseInt(match[1]) * 60) +
+        parseInt(match[2])
+
+    const fin =
+        (parseInt(match[3]) * 60) +
+        parseInt(match[4])
+
+    return fin <= inicio
+
+}
+
+function calcularIndicadoresTrabajador(trabajador){
+
+    const ultimoDia =
+        new Date(
+            anioActual,
+            mesActual + 1,
+            0
+        ).getDate()
+
+    let nocturnos = 0
+    let libres = 0
+    let horasMes = 0
+
+    for(let dia=1; dia<=ultimoDia; dia++){
+
+        const fechaTexto =
+            resumenFechaISO(
+                new Date(
+                    anioActual,
+                    mesActual,
+                    dia
+                )
+            )
+
+        const turno =
+            obtenerTurnoGuardado(
+                trabajador.id,
+                fechaTexto
+            )
+
+        if(resumenTurnoEsLibre(turno)){
+            libres++
+        }
+
+        if(resumenTurnoEsNocturno(turno)){
+            nocturnos++
+        }
+
+        if(resumenTurnoEsTrabajado(turno)){
+            horasMes += calcularHorasSemana(
+                [turno],
+                colacionPorCeco(trabajador.ceco)
+            )
+        }
+
+    }
+
+    const jornada =
+        parseInt(trabajador.jornada) || 0
+
+    const semanas =
+        generarSemanas(
+            mesActual,
+            anioActual
+        )
+
+    let semanasSobrecarga = 0
+    let maxHorasSemana = 0
+    let excesoMaximo = 0
+
+    semanas.forEach(semana => {
+
+        const turnosSemana = []
+
+        for(let dia=0; dia<7; dia++){
+
+            const fecha =
+                new Date(semana.inicio)
+
+            fecha.setDate(
+                fecha.getDate() + dia
+            )
+
+            turnosSemana.push(
+                obtenerTurnoGuardado(
+                    trabajador.id,
+                    resumenFechaISO(fecha)
+                )
+            )
+
+        }
+
+        const horas =
+            calcularHorasSemana(
+                turnosSemana,
+                colacionPorCeco(trabajador.ceco)
+            )
+
+        maxHorasSemana =
+            Math.max(
+                maxHorasSemana,
+                horas
+            )
+
+        if(jornada && horas > jornada){
+            semanasSobrecarga++
+            excesoMaximo =
+                Math.max(
+                    excesoMaximo,
+                    Math.round((horas - jornada) * 10) / 10
+                )
+        }
+
+    })
+
+    const domingos =
+        calcularDomingosTrabajados(
+            trabajador.id
+        )
+
+    const domingosLibres =
+        calcularDomingosLibres(
+            trabajador.id
+        )
+
+    const carga =
+        semanasSobrecarga > 0
+            ? {
+                texto: "Sobrecarga",
+                detalle: `${semanasSobrecarga} sem. sobre jornada`,
+                clase: "bg-red-50 text-red-700 border-red-200",
+                icono: "priority_high"
+            }
+            : jornada && maxHorasSemana >= jornada * 0.9
+                ? {
+                    texto: "Ajustada",
+                    detalle: `Pico ${maxHorasSemana}h / ${jornada}h`,
+                    clase: "bg-amber-50 text-amber-700 border-amber-200",
+                    icono: "speed"
+                }
+                : {
+                    texto: "Normal",
+                    detalle: jornada
+                        ? `Pico ${maxHorasSemana}h / ${jornada}h`
+                        : `Pico ${maxHorasSemana}h`,
+                    clase: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    icono: "check_circle"
+                }
+
+    return {
+        nocturnos,
+        domingos,
+        domingosLibres,
+        libres,
+        horasMes:
+            Math.round(horasMes * 10) / 10,
+        maxHorasSemana,
+        semanasSobrecarga,
+        excesoMaximo,
+        carga
+    }
+
+}
+
 
 function renderizarResumenDomingos(
     lista = trabajadoresGlobal
@@ -329,34 +630,34 @@ function renderizarResumenDomingos(
 
     lista.forEach(t => {
 
-        const domingos =
-            calcularDomingosTrabajados(
-                t.id
-            )
-
-        const libres =
-            calcularDomingosLibres(
-                t.id
-            )
+        const indicadores =
+            calcularIndicadoresTrabajador(t)
 
         html += `
 
             <div class="fade-card bg-white border border-slate-200 rounded-2xl p-3">
 
                 <!-- PERSONA -->
-                <div class="flex items-center gap-2.5 min-w-0 mb-2.5">
+                <div class="flex items-start justify-between gap-2.5 min-w-0 mb-3">
 
-                    <div class="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                        <span class="material-symbols-outlined text-blue-600 text-lg">person</span>
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                            <span class="material-symbols-outlined text-slate-600 text-lg">badge</span>
+                        </div>
+
+                        <div class="min-w-0">
+                            <h3 class="text-xs font-black text-slate-900 uppercase truncate leading-tight">
+                                ${escaparHTML(t.nombre)}
+                            </h3>
+                            <p class="text-slate-500 text-[11px] truncate">
+                                ${escaparHTML(t.responsable || "Sin responsable")}
+                            </p>
+                        </div>
                     </div>
 
-                    <div class="min-w-0">
-                        <h3 class="text-xs font-black text-slate-900 uppercase truncate leading-tight">
-                            ${escaparHTML(t.nombre)}
-                        </h3>
-                        <p class="text-slate-500 text-[11px] truncate">
-                            ${escaparHTML(t.responsable)}
-                        </p>
+                    <div class="rounded-full border px-2 py-1 text-[10px] font-black uppercase flex items-center gap-1 shrink-0 ${indicadores.carga.clase}">
+                        <span class="material-symbols-outlined text-[13px] leading-none">${indicadores.carga.icono}</span>
+                        ${indicadores.carga.texto}
                     </div>
 
                 </div>
@@ -364,24 +665,50 @@ function renderizarResumenDomingos(
                 <!-- ESTADISTICAS -->
                 <div class="grid grid-cols-2 gap-2">
 
-                    <!-- TRABAJADOS -->
+                    <div class="bg-slate-50 rounded-xl px-2.5 py-2 min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-slate-600 text-sm">dark_mode</span>
+                            <p class="text-slate-500 text-[11px] truncate">Nocturnos</p>
+                        </div>
+                        <h4 class="text-lg font-black text-slate-800 mt-0.5 leading-none">${indicadores.nocturnos}</h4>
+                    </div>
+
                     <div class="bg-blue-50 rounded-xl px-2.5 py-2 min-w-0">
                         <div class="flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-blue-600 text-sm">work</span>
-                            <p class="text-slate-500 text-[11px] truncate">Trabajados</p>
+                            <p class="text-slate-500 text-[11px] truncate">Domingos</p>
                         </div>
-                        <h4 class="text-lg font-black text-blue-600 mt-0.5 leading-none">${domingos}</h4>
+                        <h4 class="text-lg font-black text-blue-600 mt-0.5 leading-none">${indicadores.domingos}</h4>
+                        <p class="text-[10px] text-blue-500 mt-0.5">${indicadores.domingosLibres} libres</p>
                     </div>
 
-                    <!-- LIBRES -->
                     <div class="bg-emerald-50 rounded-xl px-2.5 py-2 min-w-0">
                         <div class="flex items-center gap-1.5">
                             <span class="material-symbols-outlined text-emerald-600 text-sm">event_available</span>
-                            <p class="text-slate-500 text-[11px] truncate">Libres</p>
+                            <p class="text-slate-500 text-[11px] truncate">Libres mes</p>
                         </div>
-                        <h4 class="text-lg font-black text-emerald-600 mt-0.5 leading-none">${libres}</h4>
+                        <h4 class="text-lg font-black text-emerald-600 mt-0.5 leading-none">${indicadores.libres}</h4>
                     </div>
 
+                    <div class="bg-amber-50 rounded-xl px-2.5 py-2 min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-amber-600 text-sm">monitoring</span>
+                            <p class="text-slate-500 text-[11px] truncate">Horas mes</p>
+                        </div>
+                        <h4 class="text-lg font-black text-amber-700 mt-0.5 leading-none">${indicadores.horasMes}</h4>
+                    </div>
+
+                </div>
+
+                <div class="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-2.5 py-2">
+                    <div class="flex items-center justify-between gap-2 text-[11px]">
+                        <span class="font-bold text-slate-600 truncate">${escaparHTML(indicadores.carga.detalle)}</span>
+                        ${
+                            indicadores.excesoMaximo > 0
+                                ? `<span class="font-black text-red-600 shrink-0">+${indicadores.excesoMaximo}h</span>`
+                                : `<span class="font-black text-emerald-600 shrink-0">Sin exceso</span>`
+                        }
+                    </div>
                 </div>
 
             </div>
@@ -848,6 +1175,8 @@ const turnos = planificacionGlobal
 
                 alertas.push({
 
+                    kind: "descanso",
+
                     trabajador:
                         trabajador.nombre,
 
@@ -995,6 +1324,31 @@ function calcularAlertasHoras(
 // RENDER ALERTAS
 // =====================================================
 
+function calcularTodasAlertas(trabajadores) {
+
+    const alertasDescanso =
+        calcularAlertasDescanso(
+            trabajadores
+        )
+
+    const alertasCobertura =
+        typeof calcularAlertasCobertura === "function"
+            ? calcularAlertasCobertura(trabajadores)
+            : []
+
+    const alertasHoras =
+        calcularAlertasHoras(
+            trabajadores
+        )
+
+    return [
+        ...alertasDescanso,
+        ...alertasHoras,
+        ...alertasCobertura
+    ]
+
+}
+
 function renderizarAlertas(
     trabajadores
 ) {
@@ -1006,27 +1360,10 @@ function renderizarAlertas(
 
     if (!contenedor) return
 
-    const alertasDescanso =
-        calcularAlertasDescanso(
-            trabajadores
-        )
-
-    const alertasCobertura =
-        typeof calcularAlertasCobertura === "function"
-            ? calcularAlertasCobertura()
-            : []
-
-    const alertasHoras =
-        calcularAlertasHoras(
-            trabajadores
-        )
-
     const alertas =
-        [
-            ...alertasDescanso,
-            ...alertasHoras,
-            ...alertasCobertura
-        ]
+        calcularTodasAlertas(
+            trabajadores
+        )
 
     // =====================================
     // SIN ALERTAS

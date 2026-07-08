@@ -63,6 +63,114 @@ function poblarSelectsTrabajador(){
 
     poblarSelect("trabajador-cargo", trabajadoresGlobal.map(t => t.cargo))
 
+    // Los 7 selects de turno fijo por día de la semana.
+    poblarSelectsTurnosFijosPorDia()
+
+}
+
+// Llena los 7 selects de turno fijo por día con el catálogo de turnos
+// disponible. Conserva el valor seleccionado en cada uno para no perder la
+// configuración del usuario si se vuelve a abrir el modal.
+function poblarSelectsTurnosFijosPorDia(){
+
+    const selects =
+        document.querySelectorAll(".trabajador-turno-fijo-dia")
+
+    if(selects.length === 0){ return }
+
+    const catalogo = obtenerTurnosDisponibles()
+
+    selects.forEach(select => {
+
+        const previo =
+            select.options[select.selectedIndex]?.value || ""
+
+        let html = `<option value="">— Sin turno —</option>`
+
+        catalogo.forEach(t => {
+            html += `<option value="${escaparHTML(t)}">${escaparHTML(t)}</option>`
+        })
+
+        select.innerHTML = html
+
+        if(previo && Array.from(select.options).some(o => o.value === previo)){
+            select.value = previo
+        }
+
+    })
+
+}
+
+// Lee los 7 selects y devuelve un array de {dia_semana, turno} con los días
+// que tienen un turno elegido. Los días en blanco se descartan.
+function leerTurnosFijosTrabajador(){
+
+    const turnos = []
+
+    document.querySelectorAll(".trabajador-turno-fijo-dia").forEach(select => {
+
+        const dia = parseInt(select.dataset.diaFijo)
+        const valor = select.value
+
+        if(Number.isNaN(dia) || !valor){ return }
+
+        turnos.push({
+            dia_semana: dia,
+            turno: valor
+        })
+
+    })
+
+    return turnos
+
+}
+
+// Pone cada select en el valor que indique la lista (o "" si no hay entrada).
+function pintarTurnosFijosTrabajador(turnosFijos){
+
+    const porDia = new Map()
+
+    ;(turnosFijos || []).forEach(tf => {
+        porDia.set(tf.dia_semana, tf.turno)
+    })
+
+    document.querySelectorAll(".trabajador-turno-fijo-dia").forEach(select => {
+
+        const dia = parseInt(select.dataset.diaFijo)
+        select.value = porDia.get(dia) || ""
+
+    })
+
+    actualizarContadorTurnosFijos()
+
+}
+
+// Actualiza el contador "Días configurados: X / 7".
+function actualizarContadorTurnosFijos(){
+
+    const contador =
+        document.getElementById("contador-turnos-fijos")
+
+    if(!contador){ return }
+
+    const turnos = leerTurnosFijosTrabajador()
+    contador.textContent = turnos.length
+
+}
+
+// Muestra/oculta el bloque de turnos fijos según el checkbox de rotativo.
+function alternarBloqueTurnoFijo(){
+
+    const rotativo =
+        document.getElementById("trabajador-turno-rotativo").checked
+
+    const bloque =
+        document.getElementById("bloque-turno-fijo")
+
+    if(!bloque){ return }
+
+    bloque.classList.toggle("hidden", rotativo)
+
 }
 
 // Muestra/oculta el input "nuevo" según lo elegido en el select.
@@ -167,6 +275,16 @@ function nuevoTrabajador(){
 
     document.getElementById("trabajador-es-responsable").checked = false
 
+    // Nuevo trabajador queda activo por defecto.
+    document.getElementById("trabajador-activo").checked = true
+
+    // Por defecto el trabajador sí rota turnos.
+    document.getElementById("trabajador-turno-rotativo").checked = true
+
+    // Limpiar los 7 selects de turno fijo y el contador.
+    pintarTurnosFijosTrabajador([])
+    alternarBloqueTurnoFijo()
+
     document
         .getElementById("modal-trabajador")
         .classList.remove("hidden")
@@ -214,6 +332,20 @@ function editarTrabajador(id){
     document.getElementById("trabajador-es-responsable").checked =
         !!trabajador.es_responsable
 
+    // Activo por defecto si el dato no viene definido.
+    document.getElementById("trabajador-activo").checked =
+        trabajador.activo !== false
+
+    // Rotativo por defecto si el dato no viene definido (compatibilidad con
+    // datos creados antes de que existiera el campo).
+    document.getElementById("trabajador-turno-rotativo").checked =
+        trabajador.turno_rotativo !== false
+
+    // Turnos fijos por día. `trabajador.turnos_fijos` ya viene en la
+    // respuesta del backend (ver _serializar_trabajador).
+    pintarTurnosFijosTrabajador(trabajador.turnos_fijos || [])
+    alternarBloqueTurnoFijo()
+
     document
         .getElementById("modal-trabajador")
         .classList.remove("hidden")
@@ -257,7 +389,11 @@ async function guardarTrabajador(){
                 document.getElementById("trabajador-jornada").value
             ),
         es_responsable:
-            document.getElementById("trabajador-es-responsable").checked
+            document.getElementById("trabajador-es-responsable").checked,
+        activo:
+            document.getElementById("trabajador-activo").checked,
+        turno_rotativo:
+            document.getElementById("trabajador-turno-rotativo").checked
     }
 
     // =====================================
@@ -285,19 +421,53 @@ async function guardarTrabajador(){
     // =====================================
 
     if(!respuesta.ok){
-
-        let mensaje = "No se pudo guardar el trabajador."
-
-        try{
-            const error = await respuesta.json()
-            if(error && error.detail){
-                mensaje = error.detail
-            }
-        }catch(e){}
-
-        alert(mensaje)
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo guardar el trabajador"
+            )
+        )
         return
 
+    }
+
+    // =====================================
+    // TURNOS FIJOS POR DÍA (PUT aparte)
+    // =====================================
+    // Necesitamos el id del trabajador: si era creación, lo leemos de la
+    // respuesta; si era edición, ya teníamos `id`.
+    let trabajadorId = id
+    if(!trabajadorId){
+        try{
+            const creado = await respuesta.json()
+            trabajadorId = creado && creado.id
+        }catch(e){}
+    }
+
+    if(trabajadorId){
+        const turnosFijos = leerTurnosFijosTrabajador()
+        const respFijos = await guardarTurnosFijosTrabajador(
+            trabajadorId,
+            turnosFijos
+        )
+
+        if(respFijos.status === 401){
+            alert("Sesión expirada. Inicia sesión nuevamente.")
+            cerrarSesionAdmin()
+            cerrarModalTrabajador()
+            accederCRUD()
+            return
+        }
+
+        if(!respFijos.ok){
+            alert(
+                await leerMensajeRespuestaError(
+                    respFijos,
+                    "No se pudieron guardar los turnos fijos"
+                )
+            )
+            return
+        }
     }
 
     // =====================================
@@ -344,7 +514,12 @@ async function eliminarTrabajadorCRUD(id){
     }
 
     if(!respuesta.ok){
-        alert("No se pudo eliminar el trabajador.")
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo eliminar el trabajador"
+            )
+        )
         return
     }
 

@@ -134,7 +134,9 @@ function trabajadorCumpleRegla(trabajador, regla){
     const campo =
         regla.tipo === "area"
             ? trabajador.area
-            : trabajador.ceco
+            : regla.tipo === "cargo"
+                ? trabajador.cargo
+                : trabajador.ceco
 
     return String(campo || "").trim().toLowerCase() ===
         String(regla.valor || "").trim().toLowerCase()
@@ -172,54 +174,71 @@ function intervalosTrabajadosParaRegla(regla, fechaTexto){
 
 }
 
-function calcularBrechasIntervalo(requerido, intervalos, minimoPersonas){
+// Dotación (nº de intervalos) que cubre un instante t. Inicio-inclusive y
+// fin-exclusive: un turno cubre t si inicio <= t < fin.
+function dotacionEnInstante(intervalos, t){
 
-    const puntos =
-        [
-            requerido.inicio.getTime(),
-            requerido.fin.getTime()
-        ]
+    return intervalos.filter(i =>
+        i.inicio.getTime() <= t && i.fin.getTime() > t
+    ).length
 
-    intervalos.forEach(i => {
-        if(i.fin > requerido.inicio && i.inicio < requerido.fin){
-            puntos.push(
-                Math.max(i.inicio.getTime(), requerido.inicio.getTime())
-            )
-            puntos.push(
-                Math.min(i.fin.getTime(), requerido.fin.getTime())
-            )
-        }
-    })
+}
 
-    const ordenados =
-        [...new Set(puntos)].sort((a,b) => a - b)
+// Interpretación "solo dos puntos": el mínimo se exige exactamente en la
+// apertura (requerido.inicio) y en el cierre (último instante de la franja),
+// no en el tramo intermedio. Devuelve hasta dos brechas, una por punto.
+// Cada brecha lleva:
+//   - punto: "inicio" | "fin" (cuál extremo falla)
+//   - cobertura: instante que un turno debe cubrir para tapar la brecha
+//   - inicio/fin: franja completa, usada como turno a medida de respaldo
+function calcularBrechasIntervalo(requerido, intervalos, minimoInicio, minimoFin){
 
     const brechas = []
 
-    for(let i=0; i<ordenados.length - 1; i++){
+    const tInicio = requerido.inicio.getTime()
+    // Instante representativo del cierre: el último minuto de la franja.
+    const tFin = requerido.fin.getTime() - 60000
 
-        const inicio = new Date(ordenados[i])
-        const fin = new Date(ordenados[i + 1])
+    const dotacionInicio =
+        dotacionEnInstante(intervalos, tInicio)
 
-        if(fin <= inicio){ continue }
+    if(dotacionInicio < minimoInicio){
+        brechas.push({
+            punto: "inicio",
+            inicio: new Date(requerido.inicio),
+            fin: new Date(requerido.fin),
+            cobertura: new Date(tInicio),
+            dotacion: dotacionInicio,
+            minimo: minimoInicio,
+            faltan: minimoInicio - dotacionInicio
+        })
+    }
 
-        const dotacion =
-            intervalos.filter(turno =>
-                turno.inicio < fin && turno.fin > inicio
-            ).length
+    const dotacionFin =
+        dotacionEnInstante(intervalos, tFin)
 
-        if(dotacion < minimoPersonas){
-            brechas.push({
-                inicio,
-                fin,
-                dotacion,
-                faltan: minimoPersonas - dotacion
-            })
-        }
-
+    if(dotacionFin < minimoFin){
+        brechas.push({
+            punto: "fin",
+            inicio: new Date(requerido.inicio),
+            fin: new Date(requerido.fin),
+            cobertura: new Date(tFin),
+            dotacion: dotacionFin,
+            minimo: minimoFin,
+            faltan: minimoFin - dotacionFin
+        })
     }
 
     return brechas
+
+}
+
+// Etiqueta legible del punto que falla, p. ej. "Apertura 09:00" / "Cierre 05:00".
+function etiquetaPuntoBrecha(b){
+
+    return b.punto === "fin"
+        ? `Cierre ${formatearHoraDesdeFecha(b.fin)}`
+        : `Apertura ${formatearHoraDesdeFecha(b.inicio)}`
 
 }
 
@@ -266,7 +285,8 @@ function calcularCobertura(){
                     calcularBrechasIntervalo(
                         requerido,
                         intervalos,
-                        regla.minimo_personas
+                        regla.minimo_inicio ?? regla.minimo_personas,
+                        regla.minimo_fin ?? regla.minimo_personas
                     )
 
                 resultados.push({
@@ -285,9 +305,19 @@ function calcularCobertura(){
 
 }
 
-function calcularAlertasCobertura(){
+function calcularAlertasCobertura(trabajadores){
+
+    const limitarPorCargo =
+        Array.isArray(trabajadores) &&
+        trabajadores.length < trabajadoresGlobal.length
 
     return calcularCobertura()
+        .filter(r =>
+            !limitarPorCargo ||
+            trabajadores.some(
+                trabajador => trabajadorCumpleRegla(trabajador, r.regla)
+            )
+        )
         .filter(r => !r.cubierto)
         .flatMap(r => {
 
@@ -297,7 +327,7 @@ function calcularAlertasCobertura(){
                     kind: "cobertura",
                     titulo: `${r.fecha} · ${r.regla.tipo.toUpperCase()} ${r.regla.valor}`,
                     mensaje: r.error,
-                    detalle: `Mínimo ${r.regla.minimo_personas}`,
+                    detalle: `Mínimo ${r.regla.minimo_inicio ?? r.regla.minimo_personas} → ${r.regla.minimo_fin ?? r.regla.minimo_personas}`,
                 }]
             }
 
@@ -305,8 +335,8 @@ function calcularAlertasCobertura(){
                 tipo: b.faltan > 0 ? "danger" : "warning",
                 kind: "cobertura",
                 titulo: `${r.fecha} · ${r.regla.tipo.toUpperCase()} ${r.regla.valor}`,
-                mensaje: `Brecha ${formatearHoraDesdeFecha(b.inicio)} - ${formatearHoraDesdeFecha(b.fin)}`,
-                detalle: `Dotación ${b.dotacion}/${r.regla.minimo_personas} · faltan ${b.faltan}`,
+                mensaje: `Brecha ${etiquetaPuntoBrecha(b)}`,
+                detalle: `Dotación ${b.dotacion}/${b.minimo} · faltan ${b.faltan}`,
             }))
 
         })
@@ -326,7 +356,9 @@ function poblarValoresCobertura(){
     const campo =
         tipo.value === "area"
             ? "area"
-            : "ceco"
+            : tipo.value === "cargo"
+                ? "cargo"
+                : "ceco"
 
     const valores =
         [
@@ -354,7 +386,8 @@ function limpiarFormularioCobertura(){
     document.getElementById("cobertura-dia").value = "0"
     document.getElementById("cobertura-inicio").value = "09:00"
     document.getElementById("cobertura-fin").value = "05:00"
-    document.getElementById("cobertura-minimo").value = "1"
+    document.getElementById("cobertura-minimo-inicio").value = "1"
+    document.getElementById("cobertura-minimo-fin").value = "1"
     document.getElementById("cobertura-activo").checked = true
 
     poblarValoresCobertura()
@@ -375,7 +408,10 @@ function editarReglaCobertura(id){
     document.getElementById("cobertura-dia").value = regla.dia_semana
     document.getElementById("cobertura-inicio").value = regla.hora_inicio
     document.getElementById("cobertura-fin").value = regla.hora_fin
-    document.getElementById("cobertura-minimo").value = regla.minimo_personas
+    document.getElementById("cobertura-minimo-inicio").value =
+        regla.minimo_inicio ?? regla.minimo_personas
+    document.getElementById("cobertura-minimo-fin").value =
+        regla.minimo_fin ?? regla.minimo_personas
     document.getElementById("cobertura-activo").checked = !!regla.activo
 
 }
@@ -391,7 +427,8 @@ async function guardarReglaCobertura(){
         dia_semana: parseInt(document.getElementById("cobertura-dia").value),
         hora_inicio: document.getElementById("cobertura-inicio").value,
         hora_fin: document.getElementById("cobertura-fin").value,
-        minimo_personas: parseInt(document.getElementById("cobertura-minimo").value),
+        minimo_inicio: parseInt(document.getElementById("cobertura-minimo-inicio").value),
+        minimo_fin: parseInt(document.getElementById("cobertura-minimo-fin").value),
         activo: document.getElementById("cobertura-activo").checked
     }
 
@@ -412,12 +449,12 @@ async function guardarReglaCobertura(){
     }
 
     if(!respuesta.ok){
-        let mensaje = "No se pudo guardar la regla de cobertura."
-        try{
-            const error = await respuesta.json()
-            if(error && error.detail){ mensaje = error.detail }
-        }catch(e){}
-        alert(mensaje)
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo guardar la regla de cobertura"
+            )
+        )
         return
     }
 
@@ -444,7 +481,12 @@ async function eliminarReglaCobertura(id){
     }
 
     if(!respuesta.ok){
-        alert("No se pudo eliminar la regla.")
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo eliminar la regla"
+            )
+        )
         return
     }
 
@@ -482,7 +524,11 @@ function renderizarReglasCobertura(){
                 <td class="p-3">${escaparHTML(regla.valor)}</td>
                 <td class="p-3">${NOMBRES_DIAS_COBERTURA[regla.dia_semana]}</td>
                 <td class="p-3">${escaparHTML(regla.hora_inicio)} - ${escaparHTML(regla.hora_fin)}</td>
-                <td class="p-3 text-center">${regla.minimo_personas}</td>
+                <td class="p-3 text-center">${
+                    regla.minimo_inicio ?? regla.minimo_personas
+                } → ${
+                    regla.minimo_fin ?? regla.minimo_personas
+                }</td>
                 <td class="p-3 text-center">
                     <span class="px-2 py-1 rounded-full text-xs font-bold ${
                         regla.activo
@@ -558,38 +604,32 @@ function renderizarResultadoCobertura(){
         return
     }
 
-    let html = ""
-
-    problemas.forEach(r => {
-        const detalleBrechas =
-            r.error
-                ? escaparHTML(r.error)
-                : r.brechas.map(b =>
-                    `${formatearHoraDesdeFecha(b.inicio)}-${formatearHoraDesdeFecha(b.fin)} ` +
-                    `(${b.dotacion}/${r.regla.minimo_personas})`
-                ).join(", ")
-
-        html += `
-            <div class="border border-red-200 bg-red-50 rounded-2xl p-4">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div>
-                        <h4 class="font-black text-slate-800">
-                            ${escaparHTML(r.fecha)} · ${escaparHTML(r.regla.tipo.toUpperCase())}
-                            ${escaparHTML(r.regla.valor)}
-                        </h4>
-                        <p class="text-sm text-red-700 mt-1">
-                            Brechas: ${detalleBrechas}
-                        </p>
-                    </div>
-                    <span class="px-3 py-1 rounded-full bg-white text-red-700 text-xs font-bold self-start md:self-auto">
-                        Mínimo ${r.regla.minimo_personas}
-                    </span>
+    // Las brechas individuales se muestran ahora en la vista Alertas para
+    // evitar duplicación. Acá dejamos un resumen + CTA hacia esa vista.
+    contenedor.innerHTML = `
+        <div class="p-5 rounded-2xl border border-amber-200 bg-amber-50/70 text-amber-800">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <p class="font-black">${problemas.length} brecha${problemas.length === 1 ? "" : "s"} detectada${problemas.length === 1 ? "" : "s"}</p>
+                    <p class="text-sm mt-1">
+                        Hay días donde la dotación no alcanza el mínimo configurado.
+                        Abrí la vista Alertas para ver el detalle por fecha, área y CECO.
+                    </p>
                 </div>
+                <button type="button" onclick="mostrarVistaAlertas()"
+                    class="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-semibold transition flex items-center gap-2 self-start md:self-auto">
+                    <span class="material-symbols-outlined text-lg">warning</span>
+                    Ver alertas
+                </button>
             </div>
-        `
-    })
+        </div>
+    `
 
-    contenedor.innerHTML = html
+    // Refresca también la vista Alertas para que, si el usuario la abre justo
+    // después de tocar mes/año en cobertura, vea la información al día.
+    if(typeof renderizarAlertasVista === "function"){
+        renderizarAlertasVista()
+    }
 
 }
 
@@ -598,5 +638,193 @@ function renderizarCobertura(){
     poblarValoresCobertura()
     renderizarReglasCobertura()
     renderizarResultadoCobertura()
+    renderizarColacion()
+
+}
+
+// =====================================================
+// COLACIÓN POR CECO (minutos)
+// =====================================================
+
+// Llena el select con todos los CECO existentes entre los trabajadores.
+function poblarCecosColacion(){
+
+    const select =
+        document.getElementById("colacion-ceco")
+
+    if(!select){ return }
+
+    const valorActual = select.value
+
+    const cecos =
+        [
+            ...new Set(
+                trabajadoresGlobal
+                    .map(t => t.ceco)
+                    .filter(v => v && String(v).trim() !== "")
+            )
+        ].sort()
+
+    select.innerHTML = `<option value="">Seleccione</option>`
+
+    cecos.forEach(c => {
+        select.innerHTML += `
+            <option value="${escaparHTML(c)}">${escaparHTML(c)}</option>
+        `
+    })
+
+    // Conserva la selección previa si sigue disponible.
+    if(cecos.includes(valorActual)){
+        select.value = valorActual
+    }
+
+}
+
+function renderizarTablaColacion(){
+
+    const tbody =
+        document.getElementById("tabla-colacion-body")
+
+    if(!tbody){ return }
+
+    if((colacionConfigGlobal || []).length === 0){
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" class="p-5 text-center text-slate-400">
+                    Sin colaciones configuradas (se usan los valores por defecto)
+                </td>
+            </tr>
+        `
+        return
+    }
+
+    let html = ""
+
+    colacionConfigGlobal.forEach(regla => {
+        html += `
+            <tr class="hover:bg-slate-50">
+                <td class="p-3 font-semibold">${escaparHTML(regla.ceco)}</td>
+                <td class="p-3 text-center">${regla.minutos} min</td>
+                <td class="p-3">
+                    <div class="flex justify-center gap-2">
+                        <button onclick="editarColacionCeco(${regla.id})"
+                            class="px-3 py-2 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">
+                            Editar
+                        </button>
+                        <button onclick="eliminarColacionCeco(${regla.id})"
+                            class="px-3 py-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 font-semibold">
+                            Eliminar
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `
+    })
+
+    tbody.innerHTML = html
+
+}
+
+function renderizarColacion(){
+
+    poblarCecosColacion()
+    renderizarTablaColacion()
+
+}
+
+// Carga una colación existente en el formulario para editarla.
+function editarColacionCeco(id){
+
+    const regla =
+        (colacionConfigGlobal || []).find(r => r.id === id)
+
+    if(!regla){ return }
+
+    poblarCecosColacion()
+    document.getElementById("colacion-ceco").value = regla.ceco
+    document.getElementById("colacion-minutos").value = regla.minutos
+
+}
+
+async function guardarColacionCeco(){
+
+    const ceco =
+        document.getElementById("colacion-ceco").value
+
+    const minutos =
+        parseInt(document.getElementById("colacion-minutos").value, 10)
+
+    if(!ceco){
+        alert("Selecciona un CECO.")
+        return
+    }
+
+    if(!Number.isFinite(minutos) || minutos < 0){
+        alert("Indica los minutos de colación (un número válido).")
+        return
+    }
+
+    const respuesta =
+        await guardarConfiguracionColacion({ ceco, minutos })
+
+    if(respuesta.status === 401){
+        alert("Sesión expirada. Inicia sesión nuevamente.")
+        cerrarSesionAdmin()
+        accederCRUD()
+        return
+    }
+
+    if(!respuesta.ok){
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo guardar la colación"
+            )
+        )
+        return
+    }
+
+    colacionConfigGlobal = await obtenerConfiguracionColacion()
+    renderizarColacion()
+
+    // Refresca la grilla para reflejar los nuevos minutos de colación.
+    if(typeof renderizarTrabajadores === "function"){
+        renderizarTrabajadores(trabajadoresGlobal)
+    }
+
+}
+
+async function eliminarColacionCeco(id){
+
+    if(!confirm("¿Eliminar esta colación? El CECO volverá al valor por defecto.")){
+        return
+    }
+
+    const respuesta =
+        await eliminarConfiguracionColacion(id)
+
+    if(respuesta.status === 401){
+        alert("Sesión expirada. Inicia sesión nuevamente.")
+        cerrarSesionAdmin()
+        accederCRUD()
+        return
+    }
+
+    if(!respuesta.ok){
+        alert(
+            await leerMensajeRespuestaError(
+                respuesta,
+                "No se pudo eliminar la colación"
+            )
+        )
+        return
+    }
+
+    colacionConfigGlobal = await obtenerConfiguracionColacion()
+    renderizarColacion()
+
+    if(typeof renderizarTrabajadores === "function"){
+        renderizarTrabajadores(trabajadoresGlobal)
+    }
 
 }

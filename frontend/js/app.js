@@ -9,6 +9,7 @@ let planificacionGlobal = []
 // Cargos elegidos en el filtro. Array vacío = "todos los cargos" (sin filtro).
 window.cargosSeleccionados =
     []
+window.busquedaPlanificacion = window.busquedaPlanificacion || ""
 
 
 // =====================================================
@@ -16,6 +17,12 @@ window.cargosSeleccionados =
 // =====================================================
 
 async function cargarSistema(){
+
+    // Sin sesión no hay nada que mostrar: el backend rechazaría los GET
+    // protegidos y el empty-state se ocupa del resto.
+    if(!(adminAutorizado && obtenerToken())){
+        return
+    }
 
     trabajadoresGlobal =
         await obtenerTrabajadores()
@@ -28,24 +35,16 @@ async function cargarSistema(){
             await obtenerConfiguracionCobertura()
     }
 
+    if(typeof obtenerConfiguracionColacion === "function"){
+        colacionConfigGlobal =
+            await obtenerConfiguracionColacion()
+    }
+
     inicializarSelectores()
 
     cargarCargos()
 
-    renderizarTrabajadores(
-        trabajadoresGlobal
-    )
-
-    renderizarResumenDomingos(
-        trabajadoresGlobal
-    )
-    renderizarAlertas(
-    trabajadoresGlobal
-)
-
-    if(typeof renderizarCobertura === "function"){
-        renderizarCobertura()
-    }
+    actualizarVistaPlanificacion()
 
 }
 
@@ -72,6 +71,411 @@ function filtrarPorCargos(lista){
 
 }
 
+function trabajadoresPlanificacionVisibles(){
+
+    const porCargo =
+        filtrarPorCargos(trabajadoresGlobal)
+
+    const texto =
+        normalizarTexto(
+            document.getElementById("busqueda-planificacion")?.value ||
+            window.busquedaPlanificacion
+        )
+
+    if(!texto){
+        return porCargo
+    }
+
+    return porCargo.filter(t => {
+
+        const turnos =
+            planificacionGlobal
+                .filter(p => p.trabajador_id === t.id)
+                .map(p => `${p.fecha} ${p.turno} ${p.responsable || ""}`)
+                .join(" | ")
+
+        const searchable = [
+            t.nombre,
+            t.responsable,
+            t.area,
+            t.ceco,
+            t.cargo,
+            t.rut,
+            turnos
+        ].map(normalizarTexto).join(" | ")
+
+        return searchable.includes(texto)
+
+    })
+
+}
+
+function actualizarVistaPlanificacion(){
+
+    const listaRender =
+        trabajadoresPlanificacionVisibles()
+
+    renderizarTrabajadores(
+        listaRender
+    )
+
+    renderizarResumenDomingos(
+        listaRender
+    )
+
+    renderizarAlertas(
+        listaRender
+    )
+
+    if(typeof renderizarCobertura === "function"){
+        renderizarCobertura()
+    }
+
+}
+
+// Vista Alertas (full-page). Reusa `calcularTodasAlertas` de resumen.js para
+// obtener todos los alertas (cobertura + descanso + horas) y los pinta en
+// `#contenedor-alertas-vista`. Soporta un filtro rápido por `kind`.
+function renderizarAlertasVista(){
+
+    const contenedor =
+        document.getElementById("contenedor-alertas-vista")
+
+    const badge =
+        document.getElementById("badge-alertas-vista")
+
+    if(!contenedor || !badge){ return }
+
+    const trabajadoresVisibles =
+        typeof trabajadoresPlanificacionVisibles === "function"
+            ? trabajadoresPlanificacionVisibles()
+            : (typeof trabajadoresGlobal !== "undefined"
+                ? trabajadoresGlobal
+                : [])
+
+    const todas =
+        typeof calcularTodasAlertas === "function"
+            ? calcularTodasAlertas(trabajadoresVisibles)
+            : []
+
+    const filtroActivo =
+        document.querySelector(".filtro-alerta.bg-slate-900")
+            ?.dataset?.filtroAlerta || "todos"
+
+    // Conteos por categoría (para los chips de los filtros).
+    const counts = {
+        todos: todas.length,
+        cobertura: todas.filter(a => a.kind === "cobertura").length,
+        descanso: todas.filter(a => a.kind === "descanso").length,
+        horas: todas.filter(a => a.kind === "horas").length
+    }
+
+    badge.textContent =
+        `${counts.todos} alerta${counts.todos === 1 ? "" : "s"}`
+
+    // Actualizar chips de los filtros (contadores en vivo).
+    const chipFiltros = {
+        todos: "Todas",
+        cobertura: "Cobertura",
+        descanso: "Descanso",
+        horas: "Horas"
+    }
+    Object.entries(chipFiltros).forEach(([key, label]) => {
+        const btn = document.querySelector(
+            `button.filtro-alerta[data-filtro-alerta="${key}"]`
+        )
+        if(btn){
+            const n = counts[key] || 0
+            const sufijo = n === 0 ? "" : ` <span class="ml-1 opacity-70">(${n})</span>`
+            btn.innerHTML = `${label}${sufijo}`
+        }
+    })
+
+    const filtradas = todas.filter(a =>
+        filtroActivo === "todos" || a.kind === filtroActivo
+    )
+
+    if(todas.length === 0){
+        contenedor.innerHTML = `
+            <div class="md:col-span-2 p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <div class="flex items-start gap-3">
+                    <span class="material-symbols-outlined text-2xl">verified</span>
+                    <div>
+                        <p class="font-black">Sin alertas</p>
+                        <p class="text-sm mt-1">
+                            Cobertura, descanso y horas están dentro de los
+                            límites configurados para el mes actual.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `
+        return
+    }
+
+    if(filtradas.length === 0){
+        contenedor.innerHTML = `
+            <div class="md:col-span-2 p-6 rounded-2xl bg-slate-50 border border-slate-200 text-slate-500">
+                No hay alertas de la categoría "<strong>${escaparHTML(filtroActivo)}</strong>"
+                (${counts[filtroActivo]} totales en otras categorías).
+            </div>
+        `
+        return
+    }
+
+    // Renderizar con headers de categoría cuando se ve "todas".
+    const categoriasVisibles = filtroActivo === "todos"
+        ? ["cobertura", "descanso", "horas"].filter(k =>
+            filtradas.some(a => a.kind === k)
+        )
+        : [filtroActivo]
+
+    let html = ""
+
+    categoriasVisibles.forEach(categoria => {
+
+        const items = filtradas.filter(a => a.kind === categoria)
+
+        if(filtroActivo === "todos"){
+            const titulosCat = {
+                cobertura: "Cobertura",
+                descanso: "Descanso",
+                horas: "Horas"
+            }
+            html += `
+                <div class="md:col-span-2 flex items-center gap-2 mt-2 first:mt-0">
+                    <span class="material-symbols-outlined text-slate-400">label</span>
+                    <h3 class="font-black text-slate-700 uppercase tracking-wide text-xs">
+                        ${titulosCat[categoria]}
+                    </h3>
+                    <span class="text-xs text-slate-500">
+                        (${items.length})
+                    </span>
+                    <span class="flex-1 h-px bg-slate-200"></span>
+                </div>
+            `
+        }
+
+        items.forEach(alerta => {
+            html += renderAlertaCard(alerta)
+        })
+
+    })
+
+    contenedor.innerHTML = html
+
+}
+
+// Render de una alerta individual con layout según su tipo. Devuelve el
+// HTML del card.
+function renderAlertaCard(alerta){
+
+    const tonos = {
+        danger: {
+            caja: "border-red-200 bg-red-50",
+            texto: "text-red-900",
+            chip: "bg-red-200 text-red-900",
+            icono: "error",
+            etiqueta: "Crítico"
+        },
+        warning: {
+            caja: "border-amber-200 bg-amber-50",
+            texto: "text-amber-900",
+            chip: "bg-amber-200 text-amber-900",
+            icono: "warning_amber",
+            etiqueta: "Advertencia"
+        },
+        info: {
+            caja: "border-blue-200 bg-blue-50",
+            texto: "text-blue-900",
+            chip: "bg-blue-200 text-blue-900",
+            icono: "info",
+            etiqueta: "Info"
+        }
+    }
+
+    const tono = tonos[alerta.tipo] || tonos.warning
+
+    let cuerpoHtml = ""
+
+    if(alerta.kind === "cobertura"){
+        cuerpoHtml = renderAlertaCobertura(alerta, tono)
+    }else if(alerta.kind === "horas"){
+        cuerpoHtml = renderAlertaHoras(alerta, tono)
+    }else{
+        cuerpoHtml = renderAlertaDescanso(alerta, tono)
+    }
+
+    const cta =
+        alerta.kind === "cobertura"
+            ? `
+                <button type="button" onclick="mostrarVistaCobertura()"
+                    class="text-xs font-bold underline ${tono.texto} opacity-80 hover:opacity-100">
+                    Ir a Cobertura →
+                </button>
+            `
+            : `
+                <button type="button" onclick="mostrarVistaPlanificacion()"
+                    class="text-xs font-bold underline ${tono.texto} opacity-80 hover:opacity-100">
+                    Ir a Planificación →
+                </button>
+            `
+
+    return `
+        <div class="rounded-2xl border ${tono.caja} p-4 text-sm">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl ${tono.chip} flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">${tono.icono}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    ${cuerpoHtml}
+                    <div class="mt-2">${cta}</div>
+                </div>
+            </div>
+        </div>
+    `
+
+}
+
+function renderAlertaCobertura(alerta, tono){
+
+    return `
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${tono.chip}">
+                ${tono.etiqueta}
+            </span>
+            <span class="font-mono text-xs ${tono.texto} opacity-70">
+                ${escaparHTML(alerta.titulo || "")}
+            </span>
+        </div>
+        <p class="mt-1 font-black ${tono.texto}">
+            ${escaparHTML(alerta.mensaje || "Brecha detectada")}
+        </p>
+        ${
+            alerta.detalle
+                ? `<p class="mt-1 text-xs ${tono.texto} opacity-80">${escaparHTML(alerta.detalle)}</p>`
+                : ""
+        }
+    `
+
+}
+
+function renderAlertaHoras(alerta, tono){
+
+    const horasNum = parseFloat(alerta.horas) || 0
+    const jornadaNum = parseInt(alerta.jornada) || 0
+    const diferencia = parseFloat(alerta.diferencia) || 0
+    const exceso = diferencia > 0
+
+    const pct = jornadaNum > 0
+        ? Math.min(100, Math.round((horasNum / jornadaNum) * 100))
+        : 0
+
+    const barraColor = horasNum >= jornadaNum
+        ? "bg-emerald-500"
+        : horasNum >= jornadaNum * 0.8
+            ? "bg-blue-500"
+            : horasNum > jornadaNum
+                ? "bg-red-500"
+                : "bg-amber-500"
+
+    return `
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${tono.chip}">
+                ${exceso ? "Horas extra" : "Bajo jornada"}
+            </span>
+            <span class="font-black ${tono.texto}">
+                Semana ${escaparHTML(String(alerta.semana || ""))}
+            </span>
+        </div>
+        <p class="mt-1 font-black ${tono.texto}">
+            ${escaparHTML(alerta.trabajador || "")}
+        </p>
+        <div class="mt-2 flex items-center gap-3">
+            <div class="flex-1">
+                <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div class="h-full ${barraColor}" style="width: ${pct}%"></div>
+                </div>
+            </div>
+            <span class="text-xs font-bold ${tono.texto} whitespace-nowrap">
+                ${horasNum.toFixed(1)}h / ${jornadaNum}h
+            </span>
+        </div>
+        <p class="mt-1 text-xs ${tono.texto} opacity-80">
+            ${
+                exceso
+                    ? `+${diferencia.toFixed(1)}h sobre la meta`
+                    : `${Math.abs(diferencia).toFixed(1)}h por debajo de la meta`
+            }
+        </p>
+    `
+
+}
+
+function renderAlertaDescanso(alerta, tono){
+
+    const descanso = parseFloat(alerta.descanso) || 0
+    const esCritico = alerta.tipo === "danger"
+
+    return `
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${tono.chip}">
+                ${esCritico ? "Descanso crítico" : "Descanso corto"}
+            </span>
+        </div>
+        <p class="mt-1 font-black ${tono.texto}">
+            ${escaparHTML(alerta.trabajador || "")}
+        </p>
+        <p class="mt-1 text-xs ${tono.texto} opacity-80 flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">event</span>
+            ${escaparHTML(alerta.fecha1 || "")} → ${escaparHTML(alerta.fecha2 || "")}
+        </p>
+        <p class="mt-1 text-xs ${tono.texto} opacity-80 flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">hotel</span>
+            Descanso real: <strong>${descanso.toFixed(1)}h</strong>
+            <span class="opacity-70">(mínimo legal 12h)</span>
+        </p>
+    `
+
+}
+
+// Wire de los botones de filtro de la vista Alertas. Selecciona uno solo a
+// la vez y re-pinta la lista.
+function wireFiltrosAlertas(){
+
+    const botones = document.querySelectorAll(".filtro-alerta")
+
+    if(!botones || botones.length === 0){ return }
+
+    botones.forEach(boton => {
+
+        if(boton.dataset.wired === "1"){ return }
+        boton.dataset.wired = "1"
+
+        boton.addEventListener("click", () => {
+
+            botones.forEach(b =>
+                b.classList.remove("bg-slate-900", "text-white")
+            )
+            botones.forEach(b =>
+                b.classList.add("bg-slate-100", "text-slate-700")
+            )
+
+            boton.classList.remove("bg-slate-100", "text-slate-700")
+            boton.classList.add("bg-slate-900", "text-white")
+
+            renderizarAlertasVista()
+
+        })
+
+    })
+
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    wireFiltrosAlertas()
+})
+
 // (Re)construye el panel de casillas a partir de los cargos existentes.
 function cargarCargos(){
 
@@ -88,13 +492,13 @@ function cargarCargos(){
 
             trabajadoresGlobal
 
-            .map(
-                t => t.cargo
-            )
+                .map(
+                    t => t.cargo
+                )
 
-            .filter(
-                c => c && c.trim() !== ""
-            )
+                .filter(
+                    c => c && c.trim() !== ""
+                )
 
         )
 
@@ -111,24 +515,17 @@ function cargarCargos(){
     const todosActivo =
         window.cargosSeleccionados.length === 0
 
-    let html = `
-        <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50 font-semibold">
-            <input type="checkbox"
-                class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                ${todosActivo ? "checked" : ""}
-                onchange="seleccionarTodosCargos()">
-            <span>Todos los cargos</span>
-        </label>
-        <div class="my-1 border-t border-slate-100"></div>
-    `
-
-    cargos.forEach(c => {
+    // El panel se divide en dos zonas: buscador sticky arriba y la lista
+    // scrollable debajo. Cada fila de cargo lleva `data-cargo` para que
+    // `motorBuscarCargo` pueda ocultar/mostrar según el query.
+    const filasCargos = cargos.map(c => {
 
         const marcado =
             window.cargosSeleccionados.includes(c)
 
-        html += `
-            <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50">
+        return `
+            <label data-cargo="${escaparHTML(c)}"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50">
                 <input type="checkbox"
                     class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     value="${escaparHTML(c)}"
@@ -138,11 +535,99 @@ function cargarCargos(){
             </label>
         `
 
-    })
+    }).join("")
 
-    panel.innerHTML = html
+    // Capturamos el filtro activo ANTES de reemplazar el innerHTML: el
+    // nuevo <input> arranca con `value=""`, así que si leemos después ya
+    // perdimos el texto que el usuario había tipeado.
+    const filtroPrevio =
+        document.getElementById("busqueda-cargos")?.value ?? ""
+
+    panel.innerHTML = `
+        <div class="sticky top-0 z-10 bg-white border-b border-slate-100 p-2">
+            <label class="relative block">
+                <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">
+                    search
+                </span>
+                <input id="busqueda-cargos" type="search"
+                    oninput="motorBuscarCargo(this.value)"
+                    placeholder="Buscar cargo…"
+                    autocomplete="off"
+                    class="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+            </label>
+        </div>
+        <div id="filtro-cargo-lista" class="p-1">
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50 font-semibold">
+                <input type="checkbox"
+                    class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    ${todosActivo ? "checked" : ""}
+                    onchange="seleccionarTodosCargos()">
+                <span>Todos los cargos</span>
+            </label>
+            <div class="my-1 border-t border-slate-100"></div>
+            ${filasCargos}
+            <div id="filtro-cargo-vacio" class="hidden px-3 py-2 text-center text-xs text-slate-400">
+                Sin coincidencias
+            </div>
+        </div>
+    `
+
+    // Restauramos el filtro sobre el nuevo panel (si lo había). Restauramos
+    // también el `value` del input nuevo para que no se vea vacío mientras
+    // el usuario sigue tipeando.
+    if(filtroPrevio.trim() !== ""){
+        const nuevoInput =
+            document.getElementById("busqueda-cargos")
+
+        if(nuevoInput){
+            nuevoInput.value = filtroPrevio
+        }
+
+        motorBuscarCargo(filtroPrevio)
+    }
 
     actualizarEtiquetaCargos()
+
+}
+
+// Filtra las filas de cargo según el texto tipeado. Case/accent-insensitive
+// gracias a `normalizarTexto` (definida en api.js). La selección persiste;
+// solo cambia la visibilidad de las casillas.
+function motorBuscarCargo(query){
+
+    const lista =
+        document.getElementById("filtro-cargo-lista")
+
+    const vacio =
+        document.getElementById("filtro-cargo-vacio")
+
+    if(!lista){ return }
+
+    const queryNorm =
+        normalizarTexto(String(query || "").trim())
+
+    const filas = lista.querySelectorAll("[data-cargo]")
+
+    let visibles = 0
+
+    filas.forEach(fila => {
+
+        const cargo =
+            fila.getAttribute("data-cargo") || ""
+
+        const coincide =
+            queryNorm === "" ||
+            normalizarTexto(cargo).includes(queryNorm)
+
+        fila.classList.toggle("hidden", !coincide)
+
+        if(coincide){ visibles++ }
+
+    })
+
+    if(vacio){
+        vacio.classList.toggle("hidden", visibles > 0)
+    }
 
 }
 
@@ -239,24 +724,19 @@ document.addEventListener("mousedown", function(e){
 
 function filtrarCargo(){
 
-    const filtrados =
-        filtrarPorCargos(trabajadoresGlobal)
+    actualizarVistaPlanificacion()
 
-    renderizarTrabajadores(
-        filtrados
-    )
+}
 
-    renderizarResumenDomingos(
-        filtrados
-    )
+function aplicarBusquedaPlanificacion(){
 
-    renderizarAlertas(
-        filtrados
-    )
+    const input =
+        document.getElementById("busqueda-planificacion")
 
-    if(typeof renderizarCobertura === "function"){
-        renderizarCobertura()
-    }
+    window.busquedaPlanificacion =
+        input ? input.value : ""
+
+    actualizarVistaPlanificacion()
 
 }
 
@@ -326,6 +806,11 @@ function htmlBloqueHoras(horas, jornada){
 function renderizarTrabajadores(
     trabajadores
 ){
+
+    // Los trabajadores inactivos no aparecen en el planificador para asignarles
+    // horario (se conservan solo en la administración).
+    trabajadores =
+        (trabajadores || []).filter(t => t.activo !== false)
 
     document.getElementById(
         "total-trabajadores"
@@ -441,10 +926,12 @@ function renderizarTrabajadores(
                         <input
                             value="${escaparHTML(turno)}"
                             data-fecha="${fechaTexto}"
+                            maxlength="13"
+                            placeholder="00:00 - 00:00"
                             class="turno-input w-full rounded-xl px-2 py-2 text-sm font-medium text-center outline-none border border-transparent focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${esMesActual ? "" : "bg-slate-100"}"
                             onfocus="abrirListaTurnos(this);"
-                            oninput="filtrarListaTurnos(this);"
-                            onblur="actualizarColor(this); recalcularFila(this); guardarTurno(this);"
+                            oninput="limpiarErrorFormatoTurno(this); filtrarListaTurnos(this);"
+                            onblur="if(validarFormatoTurno(this) !== null){ actualizarColor(this); recalcularFila(this); guardarTurno(this); }"
                         >
 
                     </div>
@@ -483,6 +970,11 @@ function renderizarTrabajadores(
 
                             <div class="text-xs text-slate-500 mt-0.5 truncate">
                                 ${escaparHTML(t.responsable)}
+                            </div>
+
+                            <div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[13px] leading-none">restaurant</span>
+                                Colación: ${colacionMinutosPorCeco(t.ceco)} min
                             </div>
 
                         </div>
@@ -649,6 +1141,75 @@ function filtrarListaTurnos(input){
     dropdownTurnos.classList.remove("hidden")
 }
 
+function limpiarErrorFormatoTurno(input){
+
+    input.setCustomValidity("")
+
+    input.classList.remove(
+        "border-red-500",
+        "ring-4",
+        "ring-red-100"
+    )
+
+}
+
+function validarFormatoTurno(input){
+
+    const valor =
+        String(input.value || "").trim()
+
+    const estados = {
+        libre: "Libre",
+        saliente: "Saliente",
+        vacaciones: "Vacaciones"
+    }
+
+    if(valor === ""){
+        input.value = "Libre"
+        limpiarErrorFormatoTurno(input)
+        return "Libre"
+    }
+
+    const estado =
+        estados[valor.toLowerCase()]
+
+    if(estado){
+        input.value = estado
+        limpiarErrorFormatoTurno(input)
+        return estado
+    }
+
+    const formatoHorario =
+        /^([01]\d|2[0-3]):([0-5]\d)\s-\s([01]\d|2[0-3]):([0-5]\d)$/
+
+    if(!formatoHorario.test(valor)){
+
+        input.setCustomValidity(
+            "Ingrese el horario en formato 24 horas: 00:00 - 00:00"
+        )
+
+        input.classList.add(
+            "border-red-500",
+            "ring-4",
+            "ring-red-100"
+        )
+
+        input.title =
+            "Formato requerido: 00:00 - 00:00"
+
+        input.reportValidity()
+
+        return null
+
+    }
+
+    input.value = valor
+    limpiarErrorFormatoTurno(input)
+
+    return valor
+
+}
+
 function renderListaTurnos(input, filtro){
     const texto = (filtro || "").trim().toLowerCase()
     const opciones = obtenerTurnosDisponibles().filter(t =>
@@ -712,6 +1273,13 @@ async function guardarTurno(input){
         "GUARDANDO TURNO"
     )
 
+    // Defensa en profundidad: la vista ya está gateada, pero si llegara
+    // un input sin sesión (p. ej. cache viejo) no mandamos el POST.
+    if(!(adminAutorizado && obtenerToken())){
+        iniciarSesion()
+        return
+    }
+
     const fila =
         input.closest(
             ".fila-trabajador"
@@ -745,33 +1313,11 @@ async function guardarTurno(input){
     // OBTENER TURNO
     // =====================================
 
-    let turno =
-        input.value.trim()
+    const turno =
+        validarFormatoTurno(input)
 
-    // =====================================
-    // SI ESTA VACIO
-    // =====================================
-
-    if(turno === ""){
-
-        turno = "Libre"
-
-        input.value = "Libre"
-
-    }
-
-    // =====================================
-    // NORMALIZAR LIBRE
-    // =====================================
-
-    if(
-        turno.toLowerCase() === "libre"
-    ){
-
-        turno = "Libre"
-
-        input.value = "Libre"
-
+    if(turno === null){
+        return
     }
 
     // =====================================
@@ -795,21 +1341,48 @@ async function guardarTurno(input){
     // GUARDAR
     // =====================================
 
-    await guardarPlanificacion({
+    const respuesta =
+        await guardarPlanificacion({
+            trabajador_id:
+                trabajador.id,
 
-        trabajador_id:
-            trabajador.id,
+            responsable:
+                trabajador.responsable,
 
-        responsable:
-            trabajador.responsable,
+            fecha,
 
-        fecha,
+            turno,
 
-        turno,
+            horas
 
-        horas
+        })
 
-    })
+    if(!respuesta.ok){
+
+        if(respuesta.status === 401){
+            alert("Sesión expirada. Inicia sesión nuevamente.")
+            cerrarSesionAdmin()
+            return
+        }
+
+        let mensaje =
+            "No se pudo guardar el turno."
+
+        try{
+            const error =
+                await respuesta.json()
+
+            if(error && error.detail){
+                mensaje = error.detail
+            }
+        }catch(e){}
+
+        alert(
+            `${mensaje}. Revisa el turno ingresado y vuelve a intentarlo.`
+        )
+        return
+
+    }
 
     // =====================================
     // RECARGAR PLANIFICACION
@@ -817,47 +1390,13 @@ async function guardarTurno(input){
 
     planificacionGlobal =
         await obtenerPlanificacion()
-
-    console.log(
-        "REFRESH RESUMEN"
-    )
-
-    // =====================================
-    // FILTRAR RESPONSABLE
-    // =====================================
-
-    const listaRender =
-        filtrarPorCargos(trabajadoresGlobal)
-
-    // =====================================
-    // RENDER
-    // =====================================
-
-    renderizarTrabajadores(
-        listaRender
-    )
-    renderizarAlertas(
-    listaRender
-)
-
-    console.log(
-        calcularDomingosTrabajados(
-            trabajador.id
-        )
-    )
-
-    renderizarResumenDomingos(
-        listaRender
-    )
-
-    if(typeof renderizarCobertura === "function"){
-        renderizarCobertura()
-    }
+    actualizarVistaPlanificacion()
 
 }
 
 // =====================================================
 // INIT
 // =====================================================
-
-cargarSistema()
+// cargarSistema() se invoca desde inicializarSesion() una vez validado
+// el token contra el backend. Sin sesión los GET protegidos devolverían
+// 401 y dejarían los datos en estado inconsistente.

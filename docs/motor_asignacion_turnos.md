@@ -2,104 +2,331 @@
 
 ## Descripción general
 
-Módulo de planificación inteligente que genera propuestas de turnos mensuales respetando restricciones legales y necesidades operativas por área y cargo.
+Diseño e implementación de un motor que genera propuestas mensuales de asignación de personal de forma inteligente, analizando:
 
-> **Importante:** La generación automática nunca aplica cambios directamente al calendario oficial. Toda propuesta requiere revisión y aprobación explícita del administrador.
+- Personal disponible
+- Restricciones legales
+- Reglas por cargo
+- Cobertura operativa requerida
+- Balance de carga laboral
 
 ---
 
-## Restricciones legales (reglas duras)
+## Fuente de cobertura operativa
 
-Estas reglas son **no negociables**. El motor debe rechazar cualquier propuesta que las vulnere.
+El motor utiliza la tabla `planificacion_cobertura`, que define la cobertura mínima requerida por franja horaria.
 
-| Restricción | Regla |
-|---|---|
-| Descanso entre jornadas | Mínimo **12 horas continuas** entre fin de una jornada e inicio de la siguiente |
-| Horas semanales | No superar el máximo contractual ni el legal vigente |
-| Descanso semanal | Cumplimiento obligatorio; controlar distribución de domingos trabajados |
-| Días consecutivos | No asignar trabajo continuo más allá del máximo permitido sin descanso |
+Cada registro contiene:
+
+- Tipo de cobertura (CECO o Cargo)
+- Área / CECO
+- Cargo (opcional)
+- Día de la semana
+- Hora inicio / Hora fin
+- Mínimo de personas requeridas
+- Estado (activa / inactiva)
+
+### Ejemplo
+
+| Tipo | Área  | Día     | Inicio | Fin   | Mínimo |
+|------|-------|---------|--------|-------|--------|
+| CECO | SLOTS | Lunes   | 09:00  | 03:00 | 1      |
+| CECO | SLOTS | Viernes | 09:00  | 06:00 | 2      |
+
+El motor debe garantizar que todas las coberturas activas sean satisfechas.
+
+---
+
+## Restricciones legales (Hard Rules)
+
+Estas restricciones son obligatorias e inviolables.
+
+### Descanso entre jornadas
+
+Mínimo de **12 horas continuas** entre el fin de una jornada y el inicio de la siguiente.
+
+### Horas semanales
+
+No se puede superar:
+
+- Máximo contractual del colaborador
+- Máximo legal vigente
+
+### Descanso semanal
+
+Se debe respetar el descanso semanal obligatorio, controlando:
+
+- Domingos trabajados
+- Distribución del descanso
+- Jornadas consecutivas
+
+### Días consecutivos máximos
+
+No asignar trabajo continuo más allá del máximo permitido por ley o contrato.
 
 ---
 
 ## Objetivos de optimización
 
-Una vez cumplidas las restricciones legales, el motor optimiza en este orden de prioridad:
+Una vez cumplidas las restricciones legales, optimizar en el siguiente orden de prioridad:
 
-1. **Cobertura mínima** — Cada área debe tener la dotación mínima requerida por franja horaria.
-2. **Distribución equitativa** — Balancear entre colaboradores:
-   - Horas trabajadas totales
-   - Turnos complejos o especiales
-   - Domingos trabajados
-   - Jornadas nocturnas
-3. **Optimización de costos** — Minimizar horas extras, sobreasignaciones y costos laborales innecesarios.
-4. **Preferencias individuales** — Considerar disponibilidades, restricciones personales y preferencias operativas cuando no comprometan los puntos anteriores.
+### 1. Cobertura mínima *(máxima prioridad)*
+
+Para cada regla de cobertura activa:
+
+```
+personal_asignado >= minimo_personas
+```
+
+Si no se cumple, generar una **brecha operativa**:
+
+```json
+{
+  "tipo": "BRECHA_COBERTURA",
+  "area": "SLOTS",
+  "franja": "17:30-18:30",
+  "requerido": 1,
+  "asignado": 0
+}
+```
+
+### 2. Distribución equitativa
+
+Balancear entre colaboradores:
+
+- Horas trabajadas
+- Turnos nocturnos
+- Domingos y fines de semana
+- Turnos complejos
+
+Evitar sobrecargar sistemáticamente a los mismos colaboradores.
+
+### 3. Optimización de costos
+
+Minimizar:
+
+- Horas extra
+- Sobredotación
+- Costos laborales innecesarios
+
+### 4. Preferencias individuales
+
+Considerar, solo si no afectan prioridades superiores:
+
+- Disponibilidad declarada
+- Restricciones personales
+- Preferencias de turno
 
 ---
 
 ## Reglas por cargo
 
-> Cada cargo tiene reglas propias. El motor debe evaluar las restricciones del cargo antes de proponer cualquier turno.
+Cada cargo puede tener reglas propias definidas con la siguiente estructura:
 
-### Atributos a definir por cargo
-
-```
-- turnos_permitidos: lista de turnos válidos para el cargo
-- jornadas_validas: tipos de jornada aplicables
-- restricciones_especificas: reglas adicionales del cargo
-- cobertura_minima: dotación mínima requerida por franja/área
-- prioridad_operacional: nivel de criticidad del cargo en la operación
+```yaml
+turnos_permitidos:
+jornadas_validas:
+restricciones_especificas:
+prioridad_operacional:
 ```
 
-### Ejemplos de reglas por cargo
+### Ejemplos por cargo
 
-| Cargo | Consideraciones principales |
-|---|---|
-| Croupier | Cobertura continua por mesas activas; turnos rotativos específicos |
-| Operador de Slots | Mayor presencia en horarios peak y fines de semana |
-| Supervisor | Cobertura en franjas críticas: apertura, cierre, cambios de turno |
-| Personal administrativo | Horarios más estables; menor rotación |
+**Croupier**
+- Cobertura continua por mesas activas
+- Turnos rotativos obligatorios
+
+**Operador Slots**
+- Mayor presencia en horarios peak
+- Refuerzo en fines de semana
+
+**Supervisor**
+- Cobertura crítica en apertura y cierre
+- No puede quedar sin cobertura en estos momentos
+
+**Administrativo**
+- Horario estable preferido
+- Sin turnos nocturnos salvo excepción
 
 ---
 
-## Flujo de generación
+## Flujo del motor
 
 ```
-1. Cargar colaboradores activos
-      ↓
-2. Identificar cargo, jornada y restricciones individuales
-      ↓
-3. Evaluar demanda operativa por área y franja horaria
-      ↓
-4. Generar propuesta de turnos
-      ↓
-5. Validar cumplimiento de restricciones legales
-      ↓
-6. Detectar conflictos o alertas
-      ↓
-7. Mostrar propuesta al usuario para revisión
+1. Cargar colaboradores disponibles
+2. Cargar reglas de cobertura (planificacion_cobertura)
+3. Analizar demanda operativa por franja y día
+4. Buscar candidatos válidos para cada franja
+5. Asignar turnos respetando hard rules
+6. Validar restricciones legales
+7. Detectar y registrar conflictos
+8. Generar propuesta final (estado: PENDIENTE_APROBACION)
 ```
 
 ---
 
-## Previsualización y aprobación
+## Reglas de aprobación
 
-El flujo de aprobación es obligatorio antes de cualquier cambio al calendario oficial.
+La propuesta generada:
 
-### Al presionar "Generar propuesta"
-- Se construye una propuesta inicial (sin aplicar cambios).
-- Se muestra previsualización completa con alertas o conflictos destacados.
-
-### Acciones disponibles para el administrador
-- Revisar la propuesta generada.
-- Realizar ajustes manuales sobre la propuesta.
-- **Aprobar** → aplica los cambios al calendario oficial.
-- **Rechazar** → descarta la propuesta sin modificaciones.
+- **Nunca** debe aplicarse automáticamente.
+- **Siempre** queda en estado `PENDIENTE_APROBACION` hasta revisión manual.
 
 ---
 
-## Notas de implementación
+## Conflictos detectables
 
-- Las restricciones legales se implementan como **validaciones bloqueantes**: si alguna falla, la propuesta no puede aprobarse.
-- Los objetivos de optimización son **ponderables**: se puede ajustar el peso de cada criterio según la configuración del sistema.
-- La capa de reglas por cargo debe ser **configurable** desde la interfaz de administración, sin requerir cambios en el código.
-- El motor debe exponer el motivo de cada conflicto detectado para facilitar la corrección manual.
+El motor debe registrar y explicar cada conflicto encontrado.
+
+### Tipos de conflicto
+
+**Brecha de cobertura**
+```json
+{
+  "tipo": "BRECHA_COBERTURA",
+  "area": "SLOTS",
+  "franja": "17:30-18:30",
+  "requerido": 1,
+  "asignado": 0
+}
+```
+
+**Descanso insuficiente**
+```json
+{
+  "tipo": "DESCANSO_INSUFICIENTE",
+  "colaborador_id": 42,
+  "turno_anterior_fin": "2025-07-01T06:00:00",
+  "turno_siguiente_inicio": "2025-07-01T14:00:00",
+  "horas_descanso": 8
+}
+```
+
+**Exceso de horas**
+```json
+{
+  "tipo": "EXCESO_HORAS",
+  "colaborador_id": 42,
+  "horas_asignadas": 50,
+  "maximo_legal": 45
+}
+```
+
+**Turno inválido para cargo**
+```json
+{
+  "tipo": "TURNO_INVALIDO_CARGO",
+  "colaborador_id": 42,
+  "cargo": "Administrativo",
+  "turno_intentado": "NOCTURNO"
+}
+```
+
+---
+
+## Arquitectura interna del motor
+
+### Componentes principales
+
+```
+MotorAsignacion
+├── Loader
+│   ├── CargarColaboradores()
+│   ├── CargarCobertura()
+│   └── CargarReglasCargoS()
+├── Analizador
+│   ├── GenerarDemandaOperativa()
+│   └── EvaluarCandidatos()
+├── Asignador
+│   ├── AsignarTurnos()
+│   └── ResolverConflictos()
+├── Validador
+│   ├── ValidarHardRules()
+│   └── ValidarReglasCargoS()
+├── Optimizador
+│   ├── EquilibrarCarga()
+│   └── MinimizarCostos()
+└── GeneradorPropuesta
+    ├── RegistrarConflictos()
+    └── EmitirPropuesta()
+```
+
+### Algoritmo de asignación (pseudocódigo)
+
+```
+FUNCIÓN AsignarTurnos(mes, año):
+
+  colaboradores = CargarColaboradores()
+  franjas = GenerarFranjasDesdeCobertura(mes, año)
+  conflictos = []
+  asignaciones = []
+
+  PARA CADA franja EN franjas ORDENADAS_POR_PRIORIDAD:
+    candidatos = FiltrarCandidatosValidos(colaboradores, franja)
+
+    SI candidatos.cantidad < franja.minimo_requerido:
+      conflictos.agregar(BRECHA_COBERTURA(franja))
+      CONTINUAR
+
+    seleccionados = SeleccionarPorEquidad(candidatos, franja.minimo_requerido)
+
+    PARA CADA seleccionado EN seleccionados:
+      SI ValidarHardRules(seleccionado, franja):
+        asignaciones.agregar(Asignacion(seleccionado, franja))
+        ActualizarEstado(seleccionado, franja)
+      SINO:
+        conflictos.agregar(ConflictoDetectado(seleccionado, franja))
+
+  RETORNAR Propuesta(asignaciones, conflictos, estado=PENDIENTE_APROBACION)
+
+
+FUNCIÓN FiltrarCandidatosValidos(colaboradores, franja):
+  RETORNAR colaboradores DONDE:
+    - cargo compatible con franja
+    - no tiene turno solapado
+    - descanso mínimo respetado (>= 12h desde turno anterior)
+    - no excede horas semanales
+    - no excede días consecutivos
+
+
+FUNCIÓN SeleccionarPorEquidad(candidatos, cantidad):
+  // Ordenar por score de equidad (menor carga acumulada = mayor prioridad)
+  RETORNAR candidatos
+    .ORDENAR_POR(horas_mes ASC, turnos_nocturnos ASC, domingos_mes ASC)
+    .TOMAR(cantidad)
+```
+
+### Estrategia de optimización
+
+La optimización se aplica en capas secuenciales:
+
+| Capa | Objetivo | Técnica |
+|------|----------|---------|
+| 1 | Cobertura mínima | Búsqueda greedy por franja, priorizando las más restrictivas |
+| 2 | Equidad | Score multivariable por colaborador |
+| 3 | Costo | Penalización de horas extra y sobredotación |
+| 4 | Preferencias | Bonus si coincide con disponibilidad declarada |
+
+---
+
+## Extensibilidad y escalabilidad
+
+El motor está diseñado para crecer sin romper lo existente:
+
+- **Nuevas reglas**: agregar validadores implementando la interfaz `IReglasValidacion`
+- **Nuevos cargos**: registrar en tabla de configuración `reglas_cargo`, sin tocar código
+- **Algoritmos avanzados**: la capa `Optimizador` puede reemplazarse por **OR-Tools** o modelos de IA sin afectar el resto del flujo
+- **Múltiples fuentes**: `Loader` abstrae la fuente de datos; puede apuntar a SQLite, PostgreSQL o API externa
+
+### Hoja de ruta para optimización avanzada
+
+```
+Fase 1 (actual):   Greedy + Score de equidad
+Fase 2 (próxima):  Constraint Programming con OR-Tools (Google)
+Fase 3 (futura):   Reinforcement Learning sobre histórico de propuestas aprobadas
+```
+
+---
+
+*Documento técnico — Motor de Asignación Automática de Turnos*
+*Gestión de Horario — Ovalle Casino Resort*

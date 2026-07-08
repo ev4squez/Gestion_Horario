@@ -1,11 +1,24 @@
+import os
 import pandas as pd
 
 from .database import SessionLocal
+from .models import Empresa
 from .models import Trabajador
 
 db = SessionLocal()
 
 archivo = "uploads/trabajadores.xlsx"
+
+# Resolver la empresa destino desde el env (mismo criterio que el bootstrap).
+slug = os.getenv("COMPANY_SLUG", "default").strip() or "default"
+nombre = os.getenv("COMPANY_NAME", "Mi Empresa").strip() or "Mi Empresa"
+
+empresa = db.query(Empresa).filter(Empresa.slug == slug).first()
+if not empresa:
+    empresa = Empresa(slug=slug, nombre=nombre, activo=True)
+    db.add(empresa)
+    db.commit()
+    db.refresh(empresa)
 
 # LEER EXCEL
 df = pd.read_excel(archivo)
@@ -39,13 +52,15 @@ for _, row in df.iterrows():
     rut = row["rut"]
 
     existe = db.query(Trabajador)\
-        .filter_by(rut=rut)\
+        .filter_by(empresa_id=empresa.id, rut=rut)\
         .first()
 
     if existe:
         continue
 
     trabajador = Trabajador(
+
+        empresa_id=empresa.id,
 
         rut=rut,
 
@@ -66,4 +81,4 @@ for _, row in df.iterrows():
 # GUARDAR
 db.commit()
 
-print("Importación completada")
+print(f"Importación completada en empresa '{empresa.nombre}' (id={empresa.id})")
