@@ -343,6 +343,37 @@ Index(
 )
 
 
+class TurnoFrecuente(Base):
+    """Turno sugerido para un CECO dentro de una empresa."""
+
+    __tablename__ = "turnos_frecuentes"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    empresa_id = Column(
+        Integer,
+        ForeignKey("empresas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    ceco = Column(String, nullable=False, index=True)
+
+    # Horario normalizado en formato "HH:MM - HH:MM".
+    turno = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+
+Index(
+    "uq_turnos_frecuentes_empresa_ceco_turno",
+    TurnoFrecuente.__table__.c.empresa_id,
+    TurnoFrecuente.__table__.c.ceco,
+    TurnoFrecuente.__table__.c.turno,
+    unique=True,
+)
+
+
 class AuditLog(Base):
     """Registro simple de acciones realizadas por el super-admin global.
 
@@ -376,3 +407,56 @@ class AuditLog(Base):
     detalle = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=_now, nullable=False, index=True)
+
+
+# ============================================================================
+# FERIADOS
+# ============================================================================
+# Un Feriado es una fecha especial para una Empresa. La lista por defecto
+# (Chile 2025/2026/2027) se siembra idempotentemente en startup si la tabla
+# esta vacia para la empresa. Cada empresa puede agregar/borrar feriados
+# propios (puentes regionales, eventos internos) por API.
+#
+# `fecha` se guarda como ISO "YYYY-MM-DD". `tipo` es libre ("civil",
+# "religioso", "regional", "empresa"); el frontend lo usa solo para ordenar
+# chips, no para validacion.
+class Feriado(Base):
+
+    __tablename__ = "feriados"
+    __table_args__ = (
+        UniqueConstraint(
+            "empresa_id",
+            "fecha",
+            name="uq_feriados_empresa_fecha",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    empresa_id = Column(
+        Integer,
+        ForeignKey("empresas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # ISO YYYY-MM-DD. Sin zona horaria: el frontend interpreta segun mes/anio.
+    fecha = Column(String, nullable=False, index=True)
+
+    # Nombre legible, p. ej. "Dia del Trabajador".
+    nombre = Column(String, nullable=False)
+
+    # "civil" | "religioso" | "regional" | "empresa". Solo para UI.
+    tipo = Column(String, default="civil", nullable=False)
+
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+
+# Indice compuesto para la consulta mas frecuente del frontend:
+#   WHERE empresa_id = ? AND substr(fecha, 1, 4) = ?
+# Un indice por empresa_id + fecha ya cubre el lookup por anio completo.
+Index(
+    "idx_feriados_empresa_fecha",
+    Feriado.__table__.c.empresa_id,
+    Feriado.__table__.c.fecha,
+)

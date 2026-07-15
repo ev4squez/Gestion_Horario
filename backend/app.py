@@ -3,6 +3,7 @@ import re
 import hmac
 import hashlib
 import secrets
+import unicodedata
 
 from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,9 +24,13 @@ from .models import TrabajadorTurnoFijo
 from .models import Planificacion
 from .models import ConfiguracionCobertura
 from .models import ConfiguracionColacion
+from .models import TurnoFrecuente
 from .models import Usuario
 from .models import Empresa
 from .models import AuditLog
+from .models import Feriado
+
+from .feriados_seed import feriados_para_anio
 
 from pathlib import Path
 
@@ -63,6 +68,7 @@ def crear_tablas():
     ensure_sqlite_wal_mode()
     _crear_admin_inicial()
     _crear_super_admin_inicial()
+    _seed_feriados_chile()
 
 
 # ============================================================================
@@ -984,6 +990,43 @@ def _serializar_colacion(c: ConfiguracionColacion) -> dict:
     }
 
 
+class TurnoFrecuenteSchema(BaseModel):
+
+    ceco: str
+
+    turno: str
+
+
+def _normalizar_turno_frecuente(data: TurnoFrecuenteSchema) -> dict:
+    ceco = (data.ceco or "").strip().lower()
+    turno = (data.turno or "").strip()
+
+    if not ceco:
+        raise HTTPException(
+            status_code=422,
+            detail="Debe indicar el CECO al que aplica el turno",
+        )
+
+    if not re.fullmatch(
+        r"([01]\d|2[0-3]):[0-5]\d - ([01]\d|2[0-3]):[0-5]\d",
+        turno,
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="El turno debe tener formato HH:MM - HH:MM",
+        )
+
+    return {"ceco": ceco, "turno": turno}
+
+
+def _serializar_turno_frecuente(turno: TurnoFrecuente) -> dict:
+    return {
+        "id": turno.id,
+        "ceco": turno.ceco,
+        "turno": turno.turno,
+    }
+
+
 # =========================
 # GET TRABAJADORES
 # =========================
@@ -1658,6 +1701,123 @@ def eliminar_configuracion_colacion(
 
 
 # =========================
+# TURNOS FRECUENTES POR CECO
+# =========================
+
+@app.get("/turnos-frecuentes")
+def obtener_turnos_frecuentes(
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    turnos = db.query(TurnoFrecuente).filter(
+        TurnoFrecuente.empresa_id == empresa_id
+    ).order_by(
+        TurnoFrecuente.ceco,
+        TurnoFrecuente.turno,
+    ).all()
+
+    return [_serializar_turno_frecuente(turno) for turno in turnos]
+
+
+@app.post("/turnos-frecuentes")
+def crear_turno_frecuente(
+    data: TurnoFrecuenteSchema,
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    valores = _normalizar_turno_frecuente(data)
+
+    ceco_existe = db.query(Trabajador.id).filter(
+        Trabajador.empresa_id == empresa_id,
+        Trabajador.ceco == valores["ceco"],
+    ).first()
+
+    if not ceco_existe:
+        # Comparación retrocompatible: la base puede tener CECO en cualquier
+        # capitalización (HABITACIONES, Restaurante 5 (Patay), etc.). Si el
+        # admin lo escribe con otra mezcla de mayúsculas pero coincide
+        # ignorando case, lo aceptamos. Igual seguimos rechazando typos reales
+        # (CECO que no está en ningún trabajador de la empresa).
+        ceco_lower = valores["ceco"].lower()
+        ceco_existe = db.query(Trabajador.id).filter(
+            Trabajador.empresa_id == empresa_id,
+            Trabajador.ceco.ilike(ceco_lower),
+        ).first()
+
+    if not ceco_existe:
+        # Último fallback: comparar ignorando acentos. SQLite no trae
+        # `unaccent` built-in y PyInstaller/uvicorn no garantizan ICU
+        # cargado, así que bajamos los candidatos por `LOWER(ceco) == ?`
+        # (que ya captura mismo case tras .lower()) y validamos en Python
+        # colapsando marcas diacríticas. Esto cubre el caso clásico en
+        # planillas importadas: CECO almacenado como "CONTABILIDAD/FINANZAS
+        # Y CONTROL DE GESTIÓN" (Ó mayúscula acentuada) mientras el admin
+        # lo reenvía como "CONTABILIDAD/FINANZAS Y CONTROL DE GESTIÓN" o
+        # "contabilidad/finanzas y control de gestión".
+        def _colapsar(texto):
+            return "".join(
+                caracter
+                for caracter in unicodedata.normalize("NFD", texto.lower())
+                if unicodedata.category(caracter) != "Mn"
+            ).strip()
+
+        ceco_objetivo = _colapsar(valores["ceco"])
+        candidatos = db.query(Trabajador.ceco).filter(
+            Trabajador.empresa_id == empresa_id,
+            Trabajador.ceco.isnot(None),
+        ).all()
+        ceco_existe = any(
+            _colapsar(fila[0]) == ceco_objetivo for fila in candidatos
+        )
+
+    if not ceco_existe:
+        raise HTTPException(
+            status_code=422,
+            detail="El CECO no existe entre los trabajadores de la empresa",
+        )
+
+    nuevo = TurnoFrecuente(
+        empresa_id=empresa_id,
+        **valores,
+    )
+    db.add(nuevo)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ese turno ya está configurado para el CECO",
+        )
+
+    db.refresh(nuevo)
+    return _serializar_turno_frecuente(nuevo)
+
+
+@app.delete("/turnos-frecuentes/{turno_id}")
+def eliminar_turno_frecuente(
+    turno_id: int,
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    turno = db.query(TurnoFrecuente).filter(
+        TurnoFrecuente.id == turno_id,
+        TurnoFrecuente.empresa_id == empresa_id,
+    ).first()
+
+    if not turno:
+        raise HTTPException(
+            status_code=404,
+            detail="Turno frecuente no encontrado",
+        )
+
+    db.delete(turno)
+    db.commit()
+    return {"message": "Turno frecuente eliminado"}
+
+
+# =========================
 # USUARIOS (gestión, requiere sesión)
 # =========================
 
@@ -2028,6 +2188,64 @@ def toggle_empresa_activa(
 
 
 # =====================================================
+# SUPERADMIN: borrar la base de trabajadores de una empresa
+# =====================================================
+# Acción DESTRUCTIVA: elimina TODOS los trabajadores de una empresa,
+# junto con sus turnos fijos y turnos planificados (las FK tienen
+# `ondelete=CASCADE`, así que la base queda limpia en una sola
+# sentencia). La empresa y sus usuarios NO se tocan.
+#
+# Pensado para el caso "cargué el CSV equivocado" o "el cliente quiere
+# empezar de cero". Por eso el endpoint exige confirmación en el
+# frontend (el super-admin debe escribir el slug) y deja huella en
+# el audit log con la cantidad eliminada.
+
+@app.delete("/superadmin/empresas/{empresa_id}/trabajadores")
+def eliminar_trabajadores_empresa(
+    empresa_id: int,
+    db: Session = Depends(get_db),
+    ctx: dict = Depends(require_super_admin),
+):
+
+    e = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    # Contamos antes de borrar para devolver cuántas filas se eliminaron
+    # y dejar el detalle exacto en el audit log.
+    n_trabajadores = db.query(Trabajador).filter(
+        Trabajador.empresa_id == empresa_id,
+    ).count()
+
+    if n_trabajadores == 0:
+        # No es error: la empresa existe pero ya no tiene trabajadores.
+        # Devolvemos 200 con eliminados=0 para que el frontend no alarme.
+        return {"ok": True, "eliminados": 0, "empresa_id": empresa_id}
+
+    # Borrado en bloque. El ORM traduce esto a un DELETE ... WHERE
+    # empresa_id = :id, y las FK con ondelete="CASCADE" se encargan de
+    # trabajador_turnos_fijos y planificacion.
+    db.query(Trabajador).filter(
+        Trabajador.empresa_id == empresa_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+
+    _registrar_audit(
+        db,
+        actor=ctx,
+        accion="borrar_trabajadores_empresa",
+        empresa_id=empresa_id,
+        detalle=f"eliminados={n_trabajadores}",
+    )
+
+    return {
+        "ok": True,
+        "eliminados": n_trabajadores,
+        "empresa_id": empresa_id,
+    }
+
+
+# =====================================================
 # SUPERADMIN: stats por empresa + gestión de usuarios
 # =====================================================
 # Endpoints adicionales para que el panel SaaS Admin pueda:
@@ -2322,3 +2540,195 @@ async def get_index():
 
 app.mount("/js", StaticFiles(directory=str(frontend_path / "js")), name="js")
 app.mount("/css", StaticFiles(directory=str(frontend_path / "css")), name="css")
+
+
+# ============================================================================
+# FERIADOS
+# ============================================================================
+# Tabla `feriados` por empresa. El seed inicial (Chile 2025/2026/2027) se
+# siembra idempotentemente en _seed_feriados_chile si la tabla esta vacia
+# para la empresa. Despues los admins pueden agregar/borrar feriados custom
+# por empresa via POST/DELETE /feriados.
+
+class FeriadoSchema(BaseModel):
+
+    # ISO YYYY-MM-DD.
+    fecha: str
+
+    nombre: str
+
+    # "civil" | "religioso" | "regional" | "empresa". Solo para UI; la API
+    # no valida contra una lista cerrada.
+    tipo: str = "empresa"
+
+
+def _validar_fecha_iso(fecha: str) -> bool:
+    """Chequeo rapido del formato YYYY-MM-DD; el seed usa este mismo
+    patron asi que cualquier valor invalido falla aca."""
+    if not isinstance(fecha, str) or len(fecha) != 10:
+        return False
+    try:
+        from datetime import datetime
+        datetime.strptime(fecha, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _serializar_feriado(f: "Feriado") -> dict:
+    return {
+        "fecha": f.fecha,
+        "nombre": f.nombre,
+        "tipo": f.tipo,
+    }
+
+
+@app.get("/feriados")
+def obtener_feriados(
+    anio: int,
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    """Lista los feriados de la empresa para el anio dado. El frontend
+    cachea el resultado por anio."""
+
+    prefijo = f"{anio:04d}-"
+    feriados = db.query(Feriado).filter(
+        Feriado.empresa_id == empresa_id,
+        Feriado.fecha.startswith(prefijo),
+    ).order_by(
+        Feriado.fecha,
+    ).all()
+
+    return [_serializar_feriado(f) for f in feriados]
+
+
+@app.post("/feriados")
+def crear_o_actualizar_feriado(
+    data: FeriadoSchema,
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    """Upsert por (empresa_id, fecha). Si ya existe un feriado en esa
+    fecha para esta empresa, se actualizan nombre y tipo."""
+
+    if not _validar_fecha_iso(data.fecha):
+        raise HTTPException(
+            status_code=400,
+            detail="Fecha invalida. Usa formato YYYY-MM-DD.",
+        )
+
+    nombre = (data.nombre or "").strip()
+    if not nombre:
+        raise HTTPException(
+            status_code=400,
+            detail="El nombre es obligatorio.",
+        )
+
+    tipo = (data.tipo or "empresa").strip().lower()
+    if tipo not in ("civil", "religioso", "regional", "empresa"):
+        tipo = "empresa"
+
+    existente = db.query(Feriado).filter(
+        Feriado.empresa_id == empresa_id,
+        Feriado.fecha == data.fecha,
+    ).first()
+
+    if existente:
+        existente.nombre = nombre
+        existente.tipo = tipo
+    else:
+        db.add(Feriado(
+            empresa_id=empresa_id,
+            fecha=data.fecha,
+            nombre=nombre,
+            tipo=tipo,
+        ))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe un feriado en esa fecha.",
+        )
+
+    registro = db.query(Feriado).filter(
+        Feriado.empresa_id == empresa_id,
+        Feriado.fecha == data.fecha,
+    ).first()
+    return _serializar_feriado(registro)
+
+
+@app.delete("/feriados/{fecha}")
+def eliminar_feriado(
+    fecha: str,
+    db: Session = Depends(get_db),
+    empresa_id: int = Depends(get_empresa_id),
+):
+    """Borra el feriado de la empresa para esa fecha. Idempotente: si
+    no existe, devuelve 204 igual."""
+
+    if not _validar_fecha_iso(fecha):
+        raise HTTPException(
+            status_code=400,
+            detail="Fecha invalida. Usa formato YYYY-MM-DD.",
+        )
+
+    feriado = db.query(Feriado).filter(
+        Feriado.empresa_id == empresa_id,
+        Feriado.fecha == fecha,
+    ).first()
+
+    if feriado:
+        db.delete(feriado)
+        db.commit()
+
+    return {"ok": True}
+
+
+# ============================================================================
+# SEED: feriados oficiales Chile 2025/2026/2027
+# ============================================================================
+# Se ejecuta una vez al startup. Para cada empresa ya creada, si NO tiene
+# ningun feriado sembrado todavia (count == 0) le insertamos la lista
+# correspondiente al anio. Es idempotente: si la empresa ya tiene
+# feriados custom o el seed ya se sembro, no hace nada.
+def _seed_feriados_chile():
+
+    try:
+        inspector = inspect(engine)
+        if "feriados" not in inspector.get_table_names():
+            return
+    except Exception:
+        return
+
+    with db_migration_lock():
+        db = SessionLocal()
+        try:
+            empresas = db.query(Empresa).filter(
+                Empresa.activo == True  # noqa: E712 (SQLAlchemy ORM)
+            ).all()
+
+            for empresa in empresas:
+                cantidad = db.query(Feriado).filter(
+                    Feriado.empresa_id == empresa.id,
+                ).count()
+                if cantidad > 0:
+                    continue
+
+                for anio_actual in (2025, 2026, 2027):
+                    for fecha, nombre, tipo in feriados_para_anio(anio_actual):
+                        db.add(Feriado(
+                            empresa_id=empresa.id,
+                            fecha=fecha,
+                            nombre=nombre,
+                            tipo=tipo,
+                        ))
+
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()

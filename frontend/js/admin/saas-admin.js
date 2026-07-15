@@ -118,6 +118,8 @@ function renderizarEmpresasSaas(){
                     class="text-xs font-bold text-purple-600 hover:underline mr-3">Usuarios</button>
                 <button type="button" onclick="abrirModalEditarEmpresaSaas(${e.id})"
                     class="text-xs font-bold text-blue-600 hover:underline mr-3">Editar</button>
+                <button type="button" onclick="abrirModalBorrarTrabajadoresSaas(${e.id})"
+                    class="text-xs font-bold text-red-600 hover:underline mr-3">Borrar trabajadores</button>
                 <button type="button" onclick="toggleEmpresaSaaSActiva(${e.id})"
                     class="text-xs font-bold ${e.activo ? "text-amber-600" : "text-emerald-600"} hover:underline">
                     ${e.activo ? "Desactivar" : "Activar"}
@@ -258,6 +260,157 @@ async function toggleEmpresaSaaSActiva(empresaId){
         await cargarEmpresasSaaS()
     }catch(e){
         alert(e.message || "No se pudo cambiar el estado")
+    }
+
+}
+
+// ---------------- Borrar base de trabajadores (acción destructiva) ----------------
+// El super-admin debe escribir el slug exacto de la empresa para confirmar.
+// La idea es que un click accidental NO borre la base — solo quien se tomó
+// el trabajo de copiar y pegar el slug llega al botón rojo.
+
+function abrirModalBorrarTrabajadoresSaas(empresaId){
+
+    const empresa = empresasSaasGlobal.find(e => e.id === empresaId)
+    if(!empresa){ return }
+
+    const setText = (id, val) => {
+        const el = document.getElementById(id)
+        if(el){ el.textContent = val == null ? "—" : val }
+    }
+
+    setText("borrar-trabajadores-empresa-nombre", empresa.nombre)
+    setText("borrar-trabajadores-empresa-slug", empresa.slug)
+    setText("borrar-trabajadores-slug-esperado", empresa.slug)
+
+    // Cantidad de trabajadores actuales (viene de __stats cacheado).
+    const stats = empresa.__stats || {}
+    const cant = stats.trabajadores || 0
+    setText("borrar-trabajadores-cantidad", String(cant))
+
+    // Si la empresa ya está vacía, igual dejamos el modal pero el botón
+    // confirmará una operación no-op en backend (devuelve eliminados=0).
+    // No lo bloqueamos porque el super-admin puede querer igualmente
+    // "limpiar" lo que quede.
+
+    const input = document.getElementById("borrar-trabajadores-slug-input")
+    if(input){ input.value = "" }
+
+    const error = document.getElementById("borrar-trabajadores-error")
+    if(error){ error.classList.add("hidden") }
+
+    const btn = document.getElementById("borrar-trabajadores-btn-confirmar")
+    if(btn){
+        btn.disabled = true
+        // Restauramos el texto original por si quedó "Borrando…" de un intento previo
+        btn.innerHTML = '<span class="material-symbols-outlined text-xl">delete_forever</span>Borrar definitivamente'
+    }
+
+    window.empresaBorrarTrabajadoresActual = empresa
+
+    const modal = document.getElementById("modal-borrar-trabajadores-saas")
+    modal.classList.remove("hidden")
+    modal.style.display = "flex"
+
+    // Foco automático en el input
+    setTimeout(() => {
+        if(input){ input.focus() }
+    }, 50)
+
+}
+
+function cerrarModalBorrarTrabajadoresSaas(){
+
+    const modal = document.getElementById("modal-borrar-trabajadores-saas")
+    if(!modal){ return }
+    modal.classList.add("hidden")
+    modal.style.display = "none"
+
+    window.empresaBorrarTrabajadoresActual = null
+
+    const input = document.getElementById("borrar-trabajadores-slug-input")
+    if(input){ input.value = "" }
+
+    const error = document.getElementById("borrar-trabajadores-error")
+    if(error){ error.classList.add("hidden") }
+
+    const btn = document.getElementById("borrar-trabajadores-btn-confirmar")
+    if(btn){
+        btn.disabled = true
+        btn.innerHTML = '<span class="material-symbols-outlined text-xl">delete_forever</span>Borrar definitivamente'
+    }
+
+}
+
+// Habilita el botón rojo solo cuando el slug escrito coincide exacto con
+// el de la empresa objetivo. Comparación case-sensitive (los slugs son
+// únicos y lowercase en backend, pero queremos ser estrictos en la UI).
+function validarSlugBorrarTrabajadores(){
+
+    const empresa = window.empresaBorrarTrabajadoresActual
+    if(!empresa){ return }
+
+    const input = document.getElementById("borrar-trabajadores-slug-input")
+    const btn = document.getElementById("borrar-trabajadores-btn-confirmar")
+    const error = document.getElementById("borrar-trabajadores-error")
+
+    const escrito = (input?.value || "").trim()
+    const coincide = escrito === empresa.slug
+
+    if(btn){ btn.disabled = !coincide }
+
+    // Mostramos el error solo cuando hay texto pero NO coincide
+    if(error){
+        if(escrito && !coincide){
+            error.classList.remove("hidden")
+        }else{
+            error.classList.add("hidden")
+        }
+    }
+
+}
+
+async function confirmarBorrarTrabajadoresSaas(){
+
+    const empresa = window.empresaBorrarTrabajadoresActual
+    if(!empresa){ return }
+
+    // Doble check: si el slug no coincide, no hacemos nada (defensa en
+    // profundidad por si alguien manipula el botón desde la consola).
+    const input = document.getElementById("borrar-trabajadores-slug-input")
+    if((input?.value || "").trim() !== empresa.slug){
+        return
+    }
+
+    const btn = document.getElementById("borrar-trabajadores-btn-confirmar")
+    if(btn){
+        btn.disabled = true
+        btn.innerHTML = '<span class="material-symbols-outlined text-xl animate-spin">progress_activity</span>Borrando…'
+    }
+
+    try{
+        const respuesta = await eliminarTrabajadoresEmpresaSaas(empresa.id)
+
+        cerrarModalBorrarTrabajadoresSaas()
+
+        const eliminados = (respuesta && respuesta.eliminados) || 0
+        alert(
+            eliminados > 0
+                ? `Se eliminaron ${eliminados} trabajadores de "${empresa.nombre}".`
+                : `La empresa "${empresa.nombre}" ya no tenía trabajadores.`
+        )
+
+        // Refrescamos la tabla + stats + audit
+        await cargarEmpresasSaaS()
+        cargarAuditSaas()
+
+    }catch(e){
+        // Restauramos el botón para que pueda reintentar
+        if(btn){
+            btn.disabled = false
+            btn.innerHTML = '<span class="material-symbols-outlined text-xl">delete_forever</span>Borrar definitivamente'
+        }
+        alert(e.message || "No se pudo borrar la base de trabajadores")
     }
 
 }

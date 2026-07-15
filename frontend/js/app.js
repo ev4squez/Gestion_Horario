@@ -6,6 +6,8 @@ let trabajadoresGlobal = []
 
 let planificacionGlobal = []
 
+let turnosFrecuentesGlobal = []
+
 // Cargos elegidos en el filtro. Array vacío = "todos los cargos" (sin filtro).
 window.cargosSeleccionados =
     []
@@ -29,6 +31,13 @@ async function cargarSistema(){
 
     planificacionGlobal =
         await obtenerPlanificacion()
+
+    if(typeof obtenerTurnosFrecuentes === "function"){
+        const resultado = await obtenerTurnosFrecuentes()
+        if(resultado !== null){
+            turnosFrecuentesGlobal = resultado
+        }
+    }
 
     if(typeof obtenerConfiguracionCobertura === "function"){
         coberturaConfigGlobal =
@@ -114,6 +123,19 @@ function actualizarVistaPlanificacion(){
 
     const listaRender =
         trabajadoresPlanificacionVisibles()
+
+    // Pre-cargar feriados del anio actual antes de renderizar. Si ya
+    // estan cacheados no hace falta volver a pedirlos. Tras la carga
+    // refrescamos los marcadores visuales invocando un segundo render.
+    if(typeof precargarFeriados === 'function'){
+        precargarFeriados(anioActual)
+            .then(() => {
+                if(typeof renderizarTrabajadores === 'function'){
+                    renderizarTrabajadores(listaRender)
+                }
+            })
+            .catch(() => {})
+    }
 
     renderizarTrabajadores(
         listaRender
@@ -747,6 +769,41 @@ function aplicarBusquedaPlanificacion(){
 
 const NOMBRES_DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
+// Devuelve la duración cruda del turno en formato "Xh Ymin", "Xh" o string
+// vacío para estados como Libre/Saliente/Vacaciones. Se muestra como subtexto
+// bajo el input de la celda del planificador. Sin descuento de colación:
+// refleja la franja real firmada por el admin.
+function formatearDuracionTurno(turno){
+    const match = String(turno || "").match(
+        /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/
+    )
+    if(!match){ return "" }
+
+    const inicio = parseInt(match[1]) + parseInt(match[2]) / 60
+    let fin = parseInt(match[3]) + parseInt(match[4]) / 60
+    if(fin < inicio){ fin += 24 }
+
+    const totalMinutos = Math.round((fin - inicio) * 60)
+    const horas = Math.floor(totalMinutos / 60)
+    const minutos = totalMinutos % 60
+
+    if(horas === 0){ return `${minutos}min` }
+    if(minutos === 0){ return `${horas}h` }
+    return `${horas}h ${minutos}min`
+}
+
+// Refresca el subtexto de duración del input recién editado. El planificador
+// no re-renderiza la celda al tipear (lo hace `guardarTurno` pero solo tras
+// recargar la planificación), así que sin este helper el subtexto queda
+// stale hasta el próximo repintado completo.
+window.actualizarSubtextoDuracion = function(input){
+    const celda = input ? input.parentElement : null
+    const subtexto = celda ? celda.querySelector(".turno-duracion") : null
+    if(subtexto){
+        subtexto.textContent = formatearDuracionTurno(input.value)
+    }
+}
+
 function colorBarraHoras(horas, jornada){
 
     if(horas > jornada){
@@ -913,13 +970,26 @@ function renderizarTrabajadores(
                 )
 
                 // =====================================
+                // FERIADO (cache sincrona via feriadoDe())
+                // =====================================
+                const fInfo = feriadoDe(fechaTexto)
+                const esFeriadoDia = !!fInfo
+                const nombreFeriadoDia = fInfo ? fInfo.nombre : ''
+                const clasesFeriado = esFeriadoDia
+                    ? ' bg-red-50 ring-1 ring-red-300 rounded-xl -mx-1 px-1'
+                    : ''
+                const tituloFeriado = esFeriadoDia
+                    ? ` title="Feriado: ${nombreFeriadoDia.replace(/"/g, '&quot;')}"`
+                    : ''
+
+                // =====================================
                 // CELDA DIA (responsive)
                 // =====================================
 
                 htmlDias += `
-                    <div class="${esMesActual ? "" : "opacity-60"}">
+                    <div class="${esMesActual ? '' : 'opacity-60'}${clasesFeriado}"${tituloFeriado}>
 
-                        <div class="text-[11px] uppercase tracking-wide text-slate-500 mb-1 text-center">
+                        <div class="text-[11px] uppercase tracking-wide ${esFeriadoDia ? 'text-red-600 font-bold' : 'text-slate-500'} mb-1 text-center">
                             ${NOMBRES_DIAS[dia]} ${fecha.getDate()}
                         </div>
 
@@ -931,8 +1001,12 @@ function renderizarTrabajadores(
                             class="turno-input w-full rounded-xl px-2 py-2 text-sm font-medium text-center outline-none border border-transparent focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${esMesActual ? "" : "bg-slate-100"}"
                             onfocus="abrirListaTurnos(this);"
                             oninput="limpiarErrorFormatoTurno(this); filtrarListaTurnos(this);"
-                            onblur="if(validarFormatoTurno(this) !== null){ actualizarColor(this); recalcularFila(this); guardarTurno(this); }"
+                            onblur="if(validarFormatoTurno(this) !== null){ actualizarColor(this); recalcularFila(this); guardarTurno(this); if(window.actualizarSubtextoDuracion){ window.actualizarSubtextoDuracion(this); } }"
                         >
+
+                        <div class="turno-duracion text-[10px] text-slate-400 mt-1 text-center tabular-nums">
+                            ${formatearDuracionTurno(turno)}
+                        </div>
 
                     </div>
                 `
@@ -1094,10 +1168,53 @@ function recalcularFila(input){
 // controlamos por completo. La lista de turnos sale del propio <datalist> para
 // mantener una única fuente de verdad.
 
-function obtenerTurnosDisponibles(){
-    const dl = document.getElementById("turnos")
-    if(!dl){ return [] }
-    return Array.from(dl.options).map(o => o.value)
+function obtenerTurnosDisponibles(ceco = null){
+    const estados = ["Libre", "Saliente", "Vacaciones"]
+    const cecoNormalizado = normalizarTexto(ceco)
+    const hayConfigurados = (turnosFrecuentesGlobal || []).length > 0
+
+    // ¿Hay catálogo relevante para este CECO? Coincide cuando el CECO tiene
+    // turnos propios o cuando se piden los defaults globales (ceco === null).
+    const hayCatalogoParaCeco = ceco === null
+        ? hayConfigurados
+        : (turnosFrecuentesGlobal || []).some(item =>
+            normalizarTexto(item.ceco) === cecoNormalizado
+        )
+
+    const configurados = (turnosFrecuentesGlobal || [])
+        .filter(item =>
+            ceco === null ||
+            normalizarTexto(item.ceco) === cecoNormalizado
+        )
+        .map(item => item.turno)
+
+    // Defaults legacy: solo aparecen cuando NUNCA se configuró nada para el
+    // CECO pedido (incluye el caso global). Si ya hay catálogo relevante se
+    // respeta la configuración del usuario sin contaminar con la lista fija.
+    const predeterminados = hayCatalogoParaCeco
+        ? []
+        : [
+            "09:00 - 18:30",
+            "09:00 - 17:30",
+            "16:30 - 03:00",
+            "17:30 - 04:00",
+            "18:30 - 05:00",
+            "19:30 - 06:00"
+        ]
+
+    return [...new Set([...configurados, ...predeterminados, ...estados])]
+}
+
+function obtenerCecoDesdeInputTurno(input){
+    const fila = input ? input.closest(".fila-trabajador") : null
+    const trabajadorId = fila
+        ? parseInt(fila.dataset.trabajadorId)
+        : null
+    const trabajador = (trabajadoresGlobal || []).find(
+        item => item.id === trabajadorId
+    )
+
+    return trabajador ? trabajador.ceco : ""
 }
 
 let dropdownTurnos = null
@@ -1106,8 +1223,12 @@ let inputTurnoActivo = null
 function crearDropdownTurnos(){
     dropdownTurnos = document.createElement("div")
     dropdownTurnos.className =
-        "fixed z-50 max-h-64 overflow-auto rounded-xl border border-slate-200 " +
-        "bg-white shadow-lg text-sm hidden"
+        "fixed z-50 max-h-72 overflow-y-auto overscroll-contain " +
+        "rounded-xl border border-slate-200 bg-white shadow-lg " +
+        "text-sm hidden"
+    // `-webkit-overflow-scrolling: touch` mejora el scroll con trackpad /
+    // panel táctil en navegadores antiguos y mantiene momentum en iOS.
+    dropdownTurnos.style.WebkitOverflowScrolling = "touch"
     document.body.appendChild(dropdownTurnos)
 
     // Cerrar al hacer clic fuera.
@@ -1121,8 +1242,23 @@ function crearDropdownTurnos(){
         }
     })
 
-    // Cerrar al hacer scroll (la posición fija quedaría desalineada).
-    window.addEventListener("scroll", cerrarListaTurnos, true)
+    // Cerrar al hacer scroll, pero IGNORANDO el scroll que ocurre DENTRO
+    // del propio dropdown. Sin ese chequeo el scroll interno se propaga al
+    // window en capture-phase y `cerrarListaTurnos()` cierra la lista
+    // mientras el usuario todavía está navegando opciones.
+    window.addEventListener(
+        "scroll",
+        function(e){
+            if(
+                dropdownTurnos &&
+                dropdownTurnos.contains(e.target)
+            ){
+                return
+            }
+            cerrarListaTurnos()
+        },
+        true,
+    )
 }
 
 function abrirListaTurnos(input){
@@ -1212,7 +1348,8 @@ function validarFormatoTurno(input){
 
 function renderListaTurnos(input, filtro){
     const texto = (filtro || "").trim().toLowerCase()
-    const opciones = obtenerTurnosDisponibles().filter(t =>
+    const ceco = obtenerCecoDesdeInputTurno(input)
+    const opciones = obtenerTurnosDisponibles(ceco).filter(t =>
         texto === "" || t.toLowerCase().includes(texto)
     )
 
@@ -1228,8 +1365,11 @@ function renderListaTurnos(input, filtro){
 
     opciones.forEach(opcion => {
         const item = document.createElement("div")
+        const duracion = formatearDuracionTurno(opcion)
         item.className = "px-3 py-2 cursor-pointer hover:bg-blue-50 text-center"
-        item.textContent = opcion
+        item.innerHTML = duracion
+            ? `${escaparHTML(opcion)}<span class="block text-[10px] text-slate-400 tabular-nums">${escaparHTML(duracion)}</span>`
+            : escaparHTML(opcion)
         // mousedown (no click) para que se ejecute ANTES del blur del input.
         item.addEventListener("mousedown", function(e){
             e.preventDefault()

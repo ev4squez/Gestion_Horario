@@ -39,6 +39,7 @@ function ocultarTodasLasVistas() {
     // en el SaaS view). El inline gana por specificity.
     [
         "vista-planificacion",
+        "vista-turnos-frecuentes",
         "vista-trabajadores",
         "vista-cobertura",
         "vista-usuarios",
@@ -89,10 +90,6 @@ function mostrarPanelDerecho(){
     if(mainContent){
         mainContent.classList.remove("xl:col-span-12")
         mainContent.classList.add("xl:col-span-9")
-    }
-
-    if(typeof rightPanelCollapsed !== "undefined"){
-        rightPanelCollapsed = false
     }
 
 }

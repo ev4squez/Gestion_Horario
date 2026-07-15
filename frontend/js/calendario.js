@@ -290,3 +290,65 @@ function crearHeaderDia(
 
     `
 }
+
+
+// =====================================================
+// FERIADOS (helpers consumidos desde app.js para el render)
+// =====================================================
+// `feriadosPorAnio` es un dict { anio: { 'YYYY-MM-DD': { nombre, tipo } } }
+// cargado via `obtenerFeriados(anio)` cuando el usuario navega al mes.
+// Usamos las funciones de api.js (obtenerFeriados, invalidarCacheFeriados)
+// que ya manejan cache en sessionStorage.
+
+let feriadosPorAnio = {}
+
+
+async function precargarFeriados(anio){
+    // Si ya esta cargado para este anio no hacemos nada. Soporta un solo
+    // anio a la vez (el actual visible). Llamarlo dos veces seguidas es
+    // idempotente: la segunda consulta usa la cache.
+    if(feriadosPorAnio[anio]){
+        return feriadosPorAnio[anio]
+    }
+
+    try{
+        const lista = await obtenerFeriados(anio)
+        const map = {}
+        if(Array.isArray(lista)){
+            for(const f of lista){
+                if(f && f.fecha){
+                    map[f.fecha] = { nombre: f.nombre || "", tipo: f.tipo || "empresa" }
+                }
+            }
+        }
+        feriadosPorAnio[anio] = map
+        return map
+    }catch(e){
+        // Feriados nunca deben romper el render del planificador: si falla
+        // el fetch, seguimos sin marcarlos y seguimos intentando en el
+        // proximo cambio de mes.
+        feriadosPorAnio[anio] = {}
+        return {}
+    }
+}
+
+
+function feriadoDe(fechaTexto){
+    // `fechaTexto` es ISO YYYY-MM-DD (mismo formato que planificacion.fecha).
+    const anio = parseInt((fechaTexto || "").slice(0, 4), 10)
+    if(!anio){ return null }
+    const map = feriadosPorAnio[anio]
+    if(!map){ return null }
+    return map[fechaTexto] || null
+}
+
+
+function esFeriado(fechaTexto){
+    return feriadoDe(fechaTexto) !== null
+}
+
+
+function nombreFeriado(fechaTexto){
+    const f = feriadoDe(fechaTexto)
+    return f ? (f.nombre || "Feriado") : ""
+}

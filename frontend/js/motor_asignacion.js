@@ -28,13 +28,19 @@ function motorFechasDelMes(){
 
 }
 
-function motorTurnosDisponibles(){
+function motorTurnosDisponibles(ceco = null){
 
-    return obtenerTurnosDisponibles()
+    const turnosConfigurados = obtenerTurnosDisponibles(ceco)
         .filter(turno =>
             /^([01]\d|2[0-3]):[0-5]\d\s-\s([01]\d|2[0-3]):[0-5]\d$/
                 .test(String(turno || "").trim())
         )
+
+    if(turnosConfigurados.length > 0 || ceco === null){
+        return turnosConfigurados
+    }
+
+    return []
 
 }
 
@@ -139,10 +145,17 @@ function motorReglasActivas(){
 
 }
 
-function motorTurnosParaBrecha(fechaTexto, brecha){
+function motorTurnosParaBrecha(fechaTexto, brecha, regla){
+
+    // Para reglas de tipo "ceco" usamos el catálogo del CECO concreto. Para
+    // "area" / "cargo" no hay un CECO único: caemos al pool global de
+    // turnos disponibles (que ya incluye los defaults cuando la empresa aún
+    // no configuró nada). Pasar `null` aquí se apoya en `obtenerTurnosDisponibles`,
+    // que decide si el CECO "global" tiene catálogo propio.
+    const filtroCeco = regla && regla.tipo === "ceco" ? regla.valor : null
 
     const turnos =
-        motorTurnosDisponibles()
+        motorTurnosDisponibles(filtroCeco)
         .map(turno => ({
             turno,
             intervalo:
@@ -574,7 +587,7 @@ function motorTurnosCompatiblesConReglas(trabajador, fechaTexto){
     const reglas = motorReglasAplicables(trabajador, fechaTexto)
     if(reglas.length === 0){ return null }
 
-    return motorTurnosDisponibles().filter(turno =>
+    return motorTurnosDisponibles(trabajador.ceco).filter(turno =>
         reglas.some(regla =>
             motorTurnoCubreApertura(
                 turno,
@@ -653,7 +666,7 @@ function motorSeleccionarTurnoParaJornada(
     const pool =
         turnosPermitidos !== null
             ? turnosPermitidos
-            : motorTurnosDisponibles()
+            : motorTurnosDisponibles(trabajador.ceco)
 
     const candidatos =
         pool
@@ -902,9 +915,14 @@ function motorSeleccionarCandidato(
             motorEsFijo(trabajador) &&
             turnoFijo !== null
 
+        const turnosFrecuentesCeco =
+            motorTurnosDisponibles(trabajador.ceco)
+
         const turnos = esFijo
             ? [turnoFijo]
-            : turnosRotativos
+            : turnosRotativos.filter(turno =>
+                turnosFrecuentesCeco.includes(turno)
+            )
 
         turnos.forEach(turno => {
 
@@ -1116,7 +1134,8 @@ function construirPropuestaPlanificacionAutomatica(){
                     const turnos =
                         motorTurnosParaBrecha(
                             fechaTexto,
-                            brecha
+                            brecha,
+                            regla
                         )
 
                     if(turnos.length === 0){

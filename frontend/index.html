@@ -325,28 +325,6 @@
       box-shadow: 0 10px 28px rgba(16, 185, 129, 0.4);
     }
 
-    /* ── ICON TOGGLE BTN ─────────────────────── */
-    .toggle-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: white;
-      border: 1.5px solid var(--border);
-      color: var(--text-muted);
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-      transition: all 0.2s;
-    }
-
-    .toggle-btn:hover {
-      background: var(--accent-light);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
     /* ── TYPOGRAPHY ──────────────────────────── */
     .display-title {
       font-family: "Bricolage Grotesque", sans-serif;
@@ -542,6 +520,12 @@
           <span class="font-600 sidebar-text">Planificación</span>
         </button>
 
+        <button id="menu-turnos-frecuentes" onclick="mostrarVistaTurnosFrecuentes()"
+          class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
+          <span class="material-symbols-outlined text-xl">schedule</span>
+          <span class="font-500 sidebar-text">Turnos frecuentes</span>
+        </button>
+
         <button id="menu-cobertura" onclick="mostrarVistaCobertura()"
           class="menu-item hidden flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap">
           <span class="material-symbols-outlined text-xl">fact_check</span>
@@ -614,19 +598,6 @@
         <div class="px-4 md:px-6 xl:px-8 py-4 flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4">
           <!-- TÍTULO -->
           <div class="flex items-center gap-3">
-            <!-- Toggle sidebar -->
-            <button onclick="toggleSidebar()" class="toggle-btn hidden xl:inline-flex">
-              <span class="material-symbols-outlined text-xl">left_panel_close</span>
-            </button>
-
-            <!-- Toggle right panel -->
-            <button onclick="toggleRightPanel()" class="toggle-btn hidden xl:inline-flex">
-              <span class="material-symbols-outlined text-xl">right_panel_close</span>
-            </button>
-
-            <!-- Divider -->
-            <div class="hidden xl:block w-px h-8 bg-slate-200 mx-1"></div>
-
             <div>
               <h2 class="display-title text-xl md:text-2xl xl:text-3xl">
                 Gestión de Turnos
@@ -988,6 +959,70 @@
       </div>
     </div>
 
+    <!-- Modal: borrar base de trabajadores de una empresa (acción destructiva) -->
+    <div id="modal-borrar-trabajadores-saas"
+      class="hidden fixed inset-0 z-[1003] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-red-600 text-2xl">warning</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h3 class="text-xl font-black text-slate-800">Borrar trabajadores</h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Empresa: <span id="borrar-trabajadores-empresa-nombre" class="font-bold text-slate-700">—</span>
+              (<span id="borrar-trabajadores-empresa-slug" class="font-mono">—</span>)
+            </p>
+          </div>
+          <button type="button" onclick="cerrarModalBorrarTrabajadoresSaas()"
+            class="text-slate-400 hover:text-slate-700 transition shrink-0">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="rounded-2xl bg-red-50 border border-red-200 p-3 mb-4">
+          <p class="text-sm text-red-800">
+            Esta acción eliminará <span class="font-bold">todos los trabajadores</span> de
+            esta empresa, junto con sus turnos fijos y turnos planificados.
+          </p>
+          <p class="text-xs text-red-700 mt-2">
+            La empresa y sus usuarios <span class="font-bold">no</span> se modifican.
+            Esta acción <span class="font-bold">no se puede deshacer</span>.
+          </p>
+          <p class="text-xs text-red-700 mt-2">
+            Trabajadores actuales: <span id="borrar-trabajadores-cantidad" class="font-bold">—</span>
+          </p>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+            Para confirmar, escribe el slug exacto:
+            <span id="borrar-trabajadores-slug-esperado" class="font-mono text-slate-700 normal-case tracking-normal">—</span>
+          </label>
+          <input type="text" id="borrar-trabajadores-slug-input" autocomplete="off"
+            oninput="validarSlugBorrarTrabajadores()"
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 font-mono"
+            placeholder="Escribe el slug aquí" />
+          <p id="borrar-trabajadores-error" class="hidden text-xs text-red-600 mt-2 font-semibold">
+            El slug no coincide. Vuelve a escribirlo tal cual.
+          </p>
+        </div>
+
+        <div class="flex gap-2">
+          <button type="button" onclick="cerrarModalBorrarTrabajadoresSaas()"
+            class="flex-1 rounded-2xl border border-slate-300 py-3 font-semibold text-slate-700">
+            Cancelar
+          </button>
+          <button type="button" id="borrar-trabajadores-btn-confirmar" onclick="confirmarBorrarTrabajadoresSaas()"
+            class="flex-1 rounded-2xl bg-red-600 hover:bg-red-700 text-white py-3 font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled>
+            <span class="material-symbols-outlined text-xl">delete_forever</span>
+            Borrar definitivamente
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
             <!-- ===================================== -->
@@ -1014,6 +1049,79 @@
                 <span class="material-symbols-outlined text-xl">login</span>
                 Iniciar sesión
               </button>
+            </div>
+
+            <!-- ===================================== -->
+            <!-- VISTA TURNOS FRECUENTES -->
+            <!-- ===================================== -->
+
+            <div id="vista-turnos-frecuentes" class="hidden mt-6">
+              <div class="card p-6 md:p-8">
+                <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                  <div>
+                    <h2 class="text-3xl font-black text-slate-800">
+                      Turnos frecuentes por CECO
+                    </h2>
+                    <p class="text-slate-500 mt-2">
+                      Define los horarios que aparecerán al ingresar un turno para cada CECO.
+                    </p>
+                  </div>
+                  <button onclick="volverPlanificacion()"
+                    class="px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+                    Volver
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-5 gap-6">
+                  <div class="2xl:col-span-2 border border-slate-200 rounded-2xl p-5 bg-slate-50">
+                    <h3 class="font-black text-slate-800 mb-4">Agregar horario</h3>
+
+                    <div class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-semibold mb-2 text-slate-700">CECO</label>
+                        <select id="turno-frecuente-ceco"
+                          class="w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                        </select>
+                      </div>
+
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-sm font-semibold mb-2 text-slate-700">Hora de inicio</label>
+                          <input type="time" id="turno-frecuente-inicio" value="09:00"
+                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                        </div>
+                        <div>
+                          <label class="block text-sm font-semibold mb-2 text-slate-700">Hora de término</label>
+                          <input type="time" id="turno-frecuente-fin" value="18:30"
+                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button onclick="guardarTurnoFrecuente()"
+                      class="mt-5 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[20px]">add</span>
+                      Agregar turno
+                    </button>
+                  </div>
+
+                  <div class="2xl:col-span-3">
+                    <div class="overflow-auto rounded-2xl border border-slate-200">
+                      <table class="w-full text-sm">
+                        <thead class="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th class="p-4 text-left">CECO</th>
+                            <th class="p-4 text-center">Turno frecuente</th>
+                            <th class="p-4 text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody id="tabla-turnos-frecuentes-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- ===================================== -->
@@ -1563,11 +1671,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 
+  <script src="js/pdf/auxiliares.js"></script>
+  <script src="js/pdf/cabecera.js"></script>
+  <script src="js/pdf/leyenda.js"></script>
+  <script src="js/pdf/tabla.js"></script>
   <script src="js/pdf.js"></script>
 
   <script src="js/admin/auth.js"></script>
   <script src="js/admin/saas-admin.js"></script>
   <script src="js/admin/usuarios.js"></script>
+  <script src="js/admin/turnos-frecuentes.js"></script>
   <script src="js/admin/modal.js"></script>
   <script src="js/admin/trabajadores.js"></script>
   <script src="js/admin/importar.js"></script>
@@ -1575,46 +1688,6 @@
 
   <!-- SCRIPTS (sin cambios en lógica) -->
   <script>
-    let sidebarCollapsed = false;
-    let rightPanelCollapsed = false;
-
-    // SIDEBAR IZQUIERDO
-    function toggleSidebar() {
-      const sidebar = document.getElementById("sidebar");
-      const texts = document.querySelectorAll(".sidebar-text");
-
-      if (!sidebarCollapsed) {
-        sidebar.classList.remove("xl:w-72");
-        sidebar.classList.add("xl:w-20");
-        texts.forEach((t) => t.classList.add("hidden"));
-      } else {
-        sidebar.classList.remove("xl:w-20");
-        sidebar.classList.add("xl:w-72");
-        texts.forEach((t) => t.classList.remove("hidden"));
-      }
-
-      sidebarCollapsed = !sidebarCollapsed;
-    }
-
-    // PANEL DERECHO
-    function toggleRightPanel() {
-      const panel = document.getElementById("right-panel");
-      const main = document.getElementById("main-content");
-
-      if (!rightPanelCollapsed) {
-        // Inline display:none para ganar sobre `xl:flex` / `grid` de la clase.
-        panel.style.display = "none";
-        main.classList.remove("xl:col-span-9");
-        main.classList.add("xl:col-span-12");
-      } else {
-        panel.style.display = "";
-        main.classList.remove("xl:col-span-12");
-        main.classList.add("xl:col-span-9");
-      }
-
-      rightPanelCollapsed = !rightPanelCollapsed;
-    }
-
     let adminAutorizado = !!localStorage.getItem("authToken");
   </script>
 

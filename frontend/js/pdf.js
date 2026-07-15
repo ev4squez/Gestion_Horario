@@ -1,61 +1,17 @@
 // =====================================================
-// FUNCIONES AUXILIARES
-// =====================================================
-
-function obtenerNombreMes(mes){
-
-    const meses = [
-
-        'Enero',
-        'Febrero',
-        'Marzo',
-        'Abril',
-        'Mayo',
-        'Junio',
-        'Julio',
-        'Agosto',
-        'Septiembre',
-        'Octubre',
-        'Noviembre',
-        'Diciembre'
-
-    ]
-
-    return meses[mes]
-
-}
-
-function obtenerIconoPDF(tipo, color = '#ffffff'){
-
-    const iconos = {
-        calendario:
-            '<path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7zm12 7H5V7h14v2zm0 10H5v-8h14v8z"/>',
-        personas:
-            '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm6 0a3 3 0 1 0 0-6c-.35 0-.69.06-1 .17A5.98 5.98 0 0 1 14 10.83c.31.11.65.17 1 .17zM9 13c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5zm6.5.1c1.49 1.14 2.5 2.68 2.5 4.4V20h5v-2c0-2.41-3.03-4.43-7.5-4.9z"/>',
-        trabajo:
-            '<path d="M9 4V2h6v2h5a2 2 0 0 1 2 2v5H2V6a2 2 0 0 1 2-2h5zm2 0h2V4h-2zm11 9v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7h8v2h4v-2h8z"/>',
-        reloj:
-            '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5.59l3.7 3.7-1.41 1.42L11 13.41V7h2z"/>',
-        alerta:
-            '<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>',
-        cobertura:
-            '<path d="M12 2 4 5v6c0 5.05 3.41 9.74 8 11 4.59-1.26 8-5.95 8-11V5l-8-3zm-1 14-4-4 1.41-1.41L11 13.17l4.59-4.58L17 10l-6 6z"/>'
-    }
-
-    return `
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="${color}">
-            ${iconos[tipo] || iconos.calendario}
-        </svg>
-    `
-
-}
-
-
-// =====================================================
 // EXPORTAR PDF
 // =====================================================
+// Las funciones auxiliares (obtenerNombreMes, obtenerIconoPDF) viven en
+// pdf/auxiliares.js y se cargan antes que este archivo via <script>.
 
 function exportarPDF(){
+
+    // Wrap defensivo: cualquier excepcion de runtime (p. ej. una global
+    // faltante, un JSON mal formado, un pdfMake que falla) se loguea Y
+    // se muestra en pantalla, porque el usuario suele no abrir la consola
+    // y el sintoma de "le hice click y no pasa nada" esconde el error
+    // real.
+    try{
 
     // =====================================
     // VALIDACION
@@ -114,728 +70,47 @@ function exportarPDF(){
     // CABECERA
     // =====================================
 
-    contenido.push({
-
-        table:{
-
-            widths:['*'],
-
-            body:[[{
-
-                columns:[
-
-                    {
-
-                        width:42,
-
-                        svg:
-                            obtenerIconoPDF(
-                                'calendario',
-                                '#bfdbfe'
-                            ),
-
-                        margin:[0,2,14,0]
-
-                    },
-
-                    {
-
-                        width:'*',
-
-                        stack:[
-
-                            {
-
-                                text:
-                                    'PLANIFICACIÓN MENSUAL',
-
-                                fontSize:22,
-
-                                bold:true,
-
-                                color:'white'
-
-                            },
-
-                            {
-
-                                text:
-                                    `${obtenerNombreMes(
-                                        mesActual
-                                    ).toUpperCase()} ${anioActual}`,
-
-                                fontSize:12,
-
-                                color:'#bfdbfe',
-
-                                margin:[0,4,0,0]
-
-                            },
-
-                            {
-
-                                text:
-
-                                    `Cargo: ${
-                                        window.cargosSeleccionados.length
-                                        ===
-                                        0
-
-                                        ?
-
-                                        "TODOS"
-
-                                        :
-
-                                        window.cargosSeleccionados.join(", ")
-                                    }`,
-
-                                fontSize:9,
-
-                                color:'white',
-
-                                margin:[0,9,0,0]
-
-                            },
-
-                            {
-
-                                text:
-
-                                    `Área / CECO: ${
-                                        cecos || "No definido"
-                                    }`,
-
-                                fontSize:9,
-
-                                color:'#cbd5e1',
-
-                                margin:[0,3,0,0]
-
-                            }
-
-                        ]
-
-                    }
-
-                ],
-
-                fillColor:'#1e293b',
-
-                margin:[20,20,20,20]
-
-            }]]
-
-        },
-
-        layout:'noBorders',
-
-        margin:[-20,-20,-20,30]
-
-    })
+    contenido.push(
+            construirCabecera({
+                cecos,
+                mesActual,
+                anioActual,
+            })
+        )
 
     // =====================================
     // RESUMEN Y LEYENDA
     // =====================================
 
-    contenido.push({
-
-        columns:[
-
-            {
-
-                width:'33%',
-
-                table:{
-
-                    widths:[24, '*'],
-
-                    body:[[
-
-                        {
-
-                            svg:
-                                obtenerIconoPDF(
-                                    'personas',
-                                    '#2563eb'
-                                ),
-
-                            margin:[0,2,6,0]
-
-                        },
-
-                        {
-
-                            stack:[
-
-                                {
-                                    text:'COLABORADORES',
-                                    fontSize:7,
-                                    bold:true,
-                                    color:'#64748b'
-                                },
-
-                                {
-                                    text:String(trabajadores.length),
-                                    fontSize:14,
-                                    bold:true,
-                                    color:'#0f172a'
-                                }
-
-                            ]
-
-                        }
-
-                    ]]
-
-                },
-
-                layout:{
-                    hLineWidth:() => 0,
-                    vLineWidth:() => 0,
-                    fillColor:() => '#eff6ff',
-                    paddingLeft:() => 8,
-                    paddingRight:() => 8,
-                    paddingTop:() => 7,
-                    paddingBottom:() => 7
-                },
-
-                margin:[0,0,6,0]
-
-            },
-
-            {
-
-                width:'33%',
-
-                table:{
-
-                    widths:[24, '*'],
-
-                    body:[[
-
-                        {
-
-                            svg:
-                                obtenerIconoPDF(
-                                    'calendario',
-                                    '#7c3aed'
-                                ),
-
-                            margin:[0,2,6,0]
-
-                        },
-
-                        {
-
-                            stack:[
-
-                                {
-                                    text:'SEMANAS',
-                                    fontSize:7,
-                                    bold:true,
-                                    color:'#64748b'
-                                },
-
-                                {
-                                    text:String(semanas.length),
-                                    fontSize:14,
-                                    bold:true,
-                                    color:'#0f172a'
-                                }
-
-                            ]
-
-                        }
-
-                    ]]
-
-                },
-
-                layout:{
-                    hLineWidth:() => 0,
-                    vLineWidth:() => 0,
-                    fillColor:() => '#f5f3ff',
-                    paddingLeft:() => 8,
-                    paddingRight:() => 8,
-                    paddingTop:() => 7,
-                    paddingBottom:() => 7
-                },
-
-                margin:[3,0,3,0]
-
-            },
-
-            {
-
-                width:'34%',
-
-                table:{
-
-                    widths:[24, '*'],
-
-                    body:[[
-
-                        {
-
-                            svg:
-                                obtenerIconoPDF(
-                                    'trabajo',
-                                    '#059669'
-                                ),
-
-                            margin:[0,2,6,0]
-
-                        },
-
-                        {
-
-                            stack:[
-
-                                {
-                                    text:'CECO',
-                                    fontSize:7,
-                                    bold:true,
-                                    color:'#64748b'
-                                },
-
-                                {
-                                    text:cecos || 'No definido',
-                                    fontSize:9,
-                                    bold:true,
-                                    color:'#0f172a'
-                                }
-
-                            ]
-
-                        }
-
-                    ]]
-
-                },
-
-                layout:{
-                    hLineWidth:() => 0,
-                    vLineWidth:() => 0,
-                    fillColor:() => '#ecfdf5',
-                    paddingLeft:() => 8,
-                    paddingRight:() => 8,
-                    paddingTop:() => 7,
-                    paddingBottom:() => 7
-                },
-
-                margin:[6,0,0,0]
-
-            }
-
-        ],
-
-        margin:[0,0,0,8]
-
-    })
-
-    contenido.push({
-
-        columns:[
-
-            {
-                width:10,
-                canvas:[{
-                    type:'rect',
-                    x:0,
-                    y:1,
-                    w:8,
-                    h:8,
-                    color:'#dcfce7'
-                }]
-            },
-
-            {
-                width:'auto',
-                text:'Libre',
-                fontSize:7,
-                color:'#475569',
-                margin:[2,0,14,0]
-            },
-
-            {
-                width:10,
-                canvas:[{
-                    type:'rect',
-                    x:0,
-                    y:1,
-                    w:8,
-                    h:8,
-                    color:'#fef3c7'
-                }]
-            },
-
-            {
-                width:'auto',
-                text:'Vacaciones',
-                fontSize:7,
-                color:'#475569',
-                margin:[2,0,14,0]
-            },
-
-            {
-                width:10,
-                canvas:[{
-                    type:'rect',
-                    x:0,
-                    y:1,
-                    w:8,
-                    h:8,
-                    color:'#f8fafc'
-                }]
-            },
-
-            {
-                width:'auto',
-                text:'Horas semanales',
-                fontSize:7,
-                color:'#475569',
-                margin:[2,0,0,0]
-            }
-
-        ],
-
-        margin:[0,0,0,14]
-
-    })
+    contenido.push(
+        construirStats({
+            trabajadores,
+            semanas,
+            cecos,
+        })
+    )
+
+    contenido.push(construirLeyenda())
 
     // =====================================
     // SEMANAS
     // =====================================
 
-    semanas.forEach((semana,index)=>{
-
-        let body = []
-
-        const diasSemana = []
-
-        // =====================================
-        // FECHAS
-        // =====================================
-
-        for(let dia=0; dia<7; dia++){
-
-            const fecha =
-                new Date(semana.inicio)
-
-            fecha.setDate(
-                fecha.getDate() + dia
-            )
-
-            diasSemana.push(
-
-                `${fecha.getDate()}/${
-                    fecha.getMonth()+1
-                }`
-
-            )
-
-        }
-
-        // =====================================
-        // HEADER TABLA
-        // =====================================
-
-        body.push([
-
-            {
-                text:'COLABORADOR',
-                style:'tableHeader'
-            },
-
-            {
-                text:`LUN\n${diasSemana[0]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`MAR\n${diasSemana[1]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`MIÉ\n${diasSemana[2]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`JUE\n${diasSemana[3]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`VIE\n${diasSemana[4]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`SÁB\n${diasSemana[5]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:`DOM\n${diasSemana[6]}`,
-                style:'tableHeader'
-            },
-
-            {
-                text:'HRS',
-                style:'tableHeader'
-            }
-
-        ])
-
-        // =====================================
-        // FILAS
-        // =====================================
-
-        trabajadores.forEach(t => {
-
-            let fila = []
-
-            fila.push({
-
-                text:t.nombre,
-
-                bold:true,
-
-                fontSize:9,
-
-                color:'#334155'
-
-            })
-
-            let turnosSemana = []
-
-            for(let dia=0; dia<7; dia++){
-
-                const fecha =
-                    new Date(semana.inicio)
-
-                fecha.setDate(
-                    fecha.getDate() + dia
-                )
-
-                const fechaTexto =
-
-                    `${fecha.getFullYear()}-${
-                        String(
-                            fecha.getMonth()+1
-                        ).padStart(2,'0')
-                    }-${
-                        String(
-                            fecha.getDate()
-                        ).padStart(2,'0')
-                    }`
-
-                const turno =
-                    obtenerTurnoGuardado(
-                        t.id,
-                        fechaTexto
-                    )
-
-                turnosSemana.push(
-                    turno
-                )
-
-                // =====================================
-                // COLOR TURNOS
-                // =====================================
-
-                let fillColor = null
-
-                const turnoTexto =
-                    (turno || "")
-                    .toLowerCase()
-
-                if(
-                    turnoTexto === "libre"
-                ){
-
-                    fillColor = '#dcfce7'
-
-                }
-
-                if(
-                    turnoTexto.includes("vacaciones")
-                ){
-
-                    fillColor = '#fef3c7'
-
-                }
-
-                fila.push({
-
-                    text:
-                        turno || '-',
-
-                    alignment:'center',
-
-                    fontSize:8,
-
-                    fillColor
-
-                })
-
-            }
-
-            // =====================================
-            // HORAS
-            // =====================================
-
-            const horas =
-                calcularHorasSemana(
-                    turnosSemana,
-                    colacionPorCeco(t.ceco)
-                )
-
-            fila.push({
-
-                text:`${horas}h`,
-
-                bold:true,
-
-                alignment:'center',
-
-                fillColor:'#f8fafc',
-
-                fontSize:9
-
-            })
-
-            body.push(fila)
-
-        })
-
-        // =====================================
-        // BLOQUE SEMANAL
-        // =====================================
-
-        contenido.push({
-
-            unbreakable:true,
-
-            stack:[
-
-                {
-
-                    columns:[
-
-                        {
-
-                            width:20,
-
-                            svg:
-                                obtenerIconoPDF(
-                                    'calendario',
-                                    '#2563eb'
-                                ),
-
-                            margin:[0,0,5,0]
-
-                        },
-
-                        {
-
-                            text:
-                                `SEMANA ${index + 1}`,
-
-                            fontSize:13,
-
-                            bold:true,
-
-                            margin:[5,0,0,10]
-
-                        }
-
-                    ]
-
-                },
-
-                {
-
-                    table:{
-
-                        headerRows:1,
-
-                        dontBreakRows:true,
-
-                        widths:[
-
-                            110,
-                            '*',
-                            '*',
-                            '*',
-                            '*',
-                            '*',
-                            '*',
-                            '*',
-                            40
-
-                        ],
-
-                        body
-
-                    },
-
-                    layout:{
-
-                        hLineColor:() =>
-                            '#e2e8f0',
-
-                        vLineColor:() =>
-                            '#e2e8f0',
-
-                        fillColor:(rowIndex)=>{
-
-                            if(rowIndex === 0){
-
-                                return '#334155'
-
-                            }
-
-                            return rowIndex % 2 === 0
-
-                                ?
-
-                                '#f8fafc'
-
-                                :
-
-                                null
-
-                        },
-
-                        paddingLeft:() => 5,
-                        paddingRight:() => 5,
-                        paddingTop:() => 4,
-                        paddingBottom:() => 4
-
-                    },
-
-                    margin:[0,0,0,15]
-
-                }
-
-            ]
-
-        })
-
-    })
+    // El bucle de semanas vive ahora en pdf/tabla.js (construirTabla).
+    // Devuelve un array de items que se concatenan al `contenido`.
+    contenido.push(...construirTabla({trabajadores, semanas, mesActual}))
 
     // =====================================
     // ALERTAS
     // =====================================
-
+    // Guard defensivo: si por algun motivo `calcularTodasAlertas` no esta
+    // expuesta globalmente (por ejemplo, porque `resumen.js` fallo al
+    // cargar o se cargo despues de pdf.js en algun flujo), seguimos sin
+    // alertas en vez de reventar toda la generacion del PDF.
     const alertas =
-        calcularTodasAlertas(
-            trabajadores
-        )
+        typeof calcularTodasAlertas === "function"
+            ? calcularTodasAlertas(trabajadores)
+            : []
 
     if(
         alertas
@@ -1085,5 +360,33 @@ function exportarPDF(){
         }_${anioActual}.pdf`
 
     )
+
+    }catch(err){
+
+        // Loguear a la consola con stack completo para debugging.
+        console.error("[exportarPDF] fallo:", err && err.message, err && err.stack)
+
+        // Y ademas mostrar un alert con el mensaje para que el usuario
+        // sepa que algo fallo aunque no abra la consola del navegador.
+        // Mantenemos el mensaje corto para que sea legible.
+        let msg = "No se pudo generar el PDF."
+
+        if(err && err.message){
+
+            msg += "\n\nDetalle: " + err.message
+
+        }
+
+        try{
+
+            alert(msg)
+
+        }catch(_){ // alert puede no estar disponible en algunos contextos
+
+            // Silenciar si alert no esta disponible.
+
+        }
+
+    }
 
 }

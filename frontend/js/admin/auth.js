@@ -204,6 +204,7 @@ function actualizarBotonSesion(){
 
     mostrar("btn-login", !adminAutorizado)
     mostrar("btn-logout", adminAutorizado)
+    mostrar("menu-turnos-frecuentes", adminAutorizado)
     mostrar("menu-cobertura", adminAutorizado)
     mostrar("menu-colaboradores", adminAutorizado)
     mostrar("menu-usuarios", adminAutorizado)

@@ -515,47 +515,129 @@ function renderizarReglasCobertura(){
         return
     }
 
+    // Agrupa las reglas por (tipo, valor) para que el panel derecho no se
+    // vuelva un muro plano cuando hay muchas reglas. Cada grupo emite una
+    // fila-cabecera colapsable que resume la cantidad de reglas que contiene
+    // y permite expandir/colapsar con un click. El estado vive en
+    // `window.reglasColapsadas` (Set) y persiste entre re-renders.
+    if(!window.reglasColapsadas || !(window.reglasColapsadas instanceof Set)){
+        window.reglasColapsadas = new Set()
+    }
+
+    const grupos = new Map()
+    coberturaConfigGlobal.forEach(regla => {
+        const clave = `${regla.tipo}::${regla.valor}`
+        if(!grupos.has(clave)){
+            grupos.set(clave, {
+                clave,
+                tipo: regla.tipo,
+                valor: regla.valor,
+                reglas: []
+            })
+        }
+        grupos.get(clave).reglas.push(regla)
+    })
+
+    // Orden estable: alfabético por etiqueta visible. Mantiene predecible el
+    // orden entre renders aunque cambien los IDs.
+    const gruposOrdenados = [...grupos.values()].sort((a, b) =>
+        etiquetaGrupoRegla(a).localeCompare(etiquetaGrupoRegla(b))
+    )
+
     let html = ""
 
-    coberturaConfigGlobal.forEach(regla => {
+    gruposOrdenados.forEach(grupo => {
+        const etiqueta = etiquetaGrupoRegla(grupo)
+        const total = grupo.reglas.length
+        const colapsado = window.reglasColapsadas.has(grupo.clave)
+
         html += `
-            <tr class="hover:bg-slate-50">
-                <td class="p-3 font-semibold uppercase">${escaparHTML(regla.tipo)}</td>
-                <td class="p-3">${escaparHTML(regla.valor)}</td>
-                <td class="p-3">${NOMBRES_DIAS_COBERTURA[regla.dia_semana]}</td>
-                <td class="p-3">${escaparHTML(regla.hora_inicio)} - ${escaparHTML(regla.hora_fin)}</td>
-                <td class="p-3 text-center">${
-                    regla.minimo_inicio ?? regla.minimo_personas
-                } → ${
-                    regla.minimo_fin ?? regla.minimo_personas
-                }</td>
-                <td class="p-3 text-center">
-                    <span class="px-2 py-1 rounded-full text-xs font-bold ${
-                        regla.activo
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-500"
-                    }">
-                        ${regla.activo ? "Activa" : "Inactiva"}
-                    </span>
-                </td>
-                <td class="p-3">
-                    <div class="flex justify-center gap-2">
-                        <button onclick="editarReglaCobertura(${regla.id})"
-                            class="px-3 py-2 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">
-                            Editar
-                        </button>
-                        <button onclick="eliminarReglaCobertura(${regla.id})"
-                            class="px-3 py-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 font-semibold">
-                            Eliminar
-                        </button>
-                    </div>
+            <tr class="bg-slate-50/80 border-y border-slate-200">
+                <td colspan="7" class="p-0">
+                    <button type="button"
+                        data-grupo-toggle="${escaparHTML(grupo.clave)}"
+                        aria-expanded="${colapsado ? "false" : "true"}"
+                        class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-100 transition">
+                        <span class="flex items-center gap-2 min-w-0">
+                            <span class="material-symbols-outlined text-slate-500 text-lg transition-transform" data-grupo-caret>${colapsado ? "chevron_right" : "expand_more"}</span>
+                            <span class="font-black text-slate-800 truncate">${escaparHTML(etiqueta)}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-slate-200 text-slate-700">${total} regla${total === 1 ? "" : "s"}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-blue-100 text-blue-700">${escaparHTML(grupo.tipo)}</span>
+                        </span>
+                        <span class="text-[11px] text-slate-500">Click para ${colapsado ? "expandir" : "colapsar"}</span>
+                    </button>
                 </td>
             </tr>
         `
+
+        if(colapsado){ return }
+
+        grupo.reglas.forEach(regla => {
+            html += `
+                <tr class="hover:bg-slate-50" data-grupo-fila="${escaparHTML(grupo.clave)}">
+                    <td class="p-3 font-semibold uppercase">${escaparHTML(regla.tipo)}</td>
+                    <td class="p-3">${escaparHTML(regla.valor)}</td>
+                    <td class="p-3">${NOMBRES_DIAS_COBERTURA[regla.dia_semana]}</td>
+                    <td class="p-3">${escaparHTML(regla.hora_inicio)} - ${escaparHTML(regla.hora_fin)}</td>
+                    <td class="p-3 text-center">${
+                        regla.minimo_inicio ?? regla.minimo_personas
+                    } → ${
+                        regla.minimo_fin ?? regla.minimo_personas
+                    }</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-bold ${
+                            regla.activo
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-100 text-slate-500"
+                        }">
+                            ${regla.activo ? "Activa" : "Inactiva"}
+                        </span>
+                    </td>
+                    <td class="p-3">
+                        <div class="flex justify-center gap-2">
+                            <button onclick="editarReglaCobertura(${regla.id})"
+                                class="px-3 py-2 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">
+                                Editar
+                            </button>
+                            <button onclick="eliminarReglaCobertura(${regla.id})"
+                                class="px-3 py-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 font-semibold">
+                                Eliminar
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `
+        })
     })
 
     tbody.innerHTML = html
 
+    // Wire de los toggles. Un solo listener delegado al tbody evita registrar
+    // N handlers y se acopla al re-render sin código adicional.
+    if(!tbody.dataset.gruposWired){
+        tbody.dataset.gruposWired = "1"
+        tbody.addEventListener("click", function(e){
+            const boton = e.target.closest("[data-grupo-toggle]")
+            if(!boton){ return }
+            const clave = boton.dataset.grupoToggle
+            if(window.reglasColapsadas.has(clave)){
+                window.reglasColapsadas.delete(clave)
+            }else{
+                window.reglasColapsadas.add(clave)
+            }
+            // Re-render inmediato del grupo: barato y mantiene el estado del
+            // resto del DOM (foco, scroll) sin perderlo.
+            renderizarReglasCobertura()
+        })
+    }
+
+}
+
+// Etiqueta visible del grupo: prioriza el nombre del valor y, en paréntesis,
+// aclara el tipo (CECO / Área / Cargo) cuando hay reglas de varios tipos
+// con el mismo nombre. Para la mayoría de los casos coincide con `valor`.
+function etiquetaGrupoRegla(grupo){
+    return `${grupo.valor || "(sin valor)"}`
 }
 
 function renderizarResultadoCobertura(){

@@ -1,2 +1,27 @@
+# Obsidian workspace
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Hermes AI
+.hermes/
+
+# Database
+data/*.db
+data/*.db-journal
+
+# Graphify
+graphify-out/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store

@@ -141,15 +141,24 @@ function obtenerTurnoGuardado(
     fecha
 ) {
 
+    // Comparamos con String() en ambos lados para no morir si el
+    // backend serializo `trabajador_id` como numero y `t.id` es
+    // string, o viceversa. El bug que reportaba el usuario (PDF
+    // 'todo en Libre' pese a haber turnos en pantalla) era este:
+    // en la grilla funcionaba porque ahi el codigo usaba coercion
+    // implicita o se cargaba con tipos consistentes, pero en el
+    // PDF reventaba el `===` y caia al fallback 'Libre'.
+    const tid = String(trabajadorId)
+
     const encontrado =
         planificacionGlobal.find(p =>
 
-            p.trabajador_id === trabajadorId
+            String(p.trabajador_id) === tid
 
             &&
 
-            p.fecha.startsWith(
-                fecha
+            String(p.fecha || '').startsWith(
+                String(fecha || '')
             )
 
         )

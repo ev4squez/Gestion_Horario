@@ -145,7 +145,7 @@ function authHeaders(extra = {}) {
 async function listarEmpresas(){
 
     try{
-        const response = await fetch(`/empresas`)
+        const response = await fetch(`empresas`)
         if(!response.ok){ return [] }
         return await response.json()
     }catch(e){
@@ -156,7 +156,7 @@ async function listarEmpresas(){
 
 async function loginAdmin(empresa, username, password) {
 
-    const response = await fetch(`/login`, {
+    const response = await fetch(`login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ empresa: empresa || null, username, password })
@@ -180,7 +180,7 @@ async function loginAdmin(empresa, username, password) {
 async function logoutServidor() {
 
     try {
-        await fetch(`/logout`, {
+        await fetch(`logout`, {
             method: "POST",
             headers: authHeaders()
         })
@@ -194,7 +194,7 @@ async function verificarSesion(){
     if (!obtenerToken()) { return false }
 
     try {
-        const response = await fetch(`/me`, { headers: authHeaders() })
+        const response = await fetch(`me`, { headers: authHeaders() })
         if(!response.ok){ return false }
         const data = await response.json()
         if(data && data.empresa){ guardarEmpresa(data.empresa) }
@@ -219,7 +219,7 @@ async function verificarSesion(){
 
 async function obtenerUsuarios() {
 
-    const response = await fetch(`/usuarios`, { headers: authHeaders() })
+    const response = await fetch(`usuarios`, { headers: authHeaders() })
 
     if (!response.ok) { return [] }
 
@@ -229,7 +229,7 @@ async function obtenerUsuarios() {
 
 async function crearUsuario(data) {
 
-    return await fetch(`/usuarios`, {
+    return await fetch(`usuarios`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -239,7 +239,7 @@ async function crearUsuario(data) {
 
 async function actualizarUsuario(id, data) {
 
-    return await fetch(`/usuarios/${id}`, {
+    return await fetch(`usuarios/${id}`, {
         method: "PUT",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -249,7 +249,7 @@ async function actualizarUsuario(id, data) {
 
 async function eliminarUsuario(id) {
 
-    return await fetch(`/usuarios/${id}`, {
+    return await fetch(`usuarios/${id}`, {
         method: "DELETE",
         headers: authHeaders()
     })
@@ -263,7 +263,7 @@ async function eliminarUsuario(id) {
 
 async function obtenerTrabajadores() {
 
-    const response = await fetch(`/trabajadores`, {
+    const response = await fetch(`trabajadores`, {
         headers: authHeaders()
     })
 
@@ -273,7 +273,7 @@ async function obtenerTrabajadores() {
 
 async function crearTrabajador(data) {
 
-    const response = await fetch(`/trabajadores`, {
+    const response = await fetch(`trabajadores`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -285,7 +285,7 @@ async function crearTrabajador(data) {
 
 async function importarTrabajadores(lista) {
 
-    const response = await fetch(`/trabajadores/importar`, {
+    const response = await fetch(`trabajadores/importar`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(lista)
@@ -297,7 +297,7 @@ async function importarTrabajadores(lista) {
 
 async function actualizarTrabajador(id, data) {
 
-    const response = await fetch(`/trabajadores/${id}`, {
+    const response = await fetch(`trabajadores/${id}`, {
         method: "PUT",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -309,7 +309,7 @@ async function actualizarTrabajador(id, data) {
 
 async function eliminarTrabajador(id) {
 
-    const response = await fetch(`/trabajadores/${id}`, {
+    const response = await fetch(`trabajadores/${id}`, {
         method: "DELETE",
         headers: authHeaders()
     })
@@ -348,12 +348,52 @@ async function guardarTurnosFijosTrabajador(trabajadorId, turnos){
 
 
 // =====================================================
+// TURNOS FRECUENTES POR CECO
+// =====================================================
+
+async function obtenerTurnosFrecuentes(){
+
+    const response = await fetch(`turnos-frecuentes`, {
+        headers: authHeaders()
+    })
+
+    if(response.status === 401){
+        return null
+    }
+
+    if(!response.ok){ return [] }
+
+    return await response.json()
+
+}
+
+async function crearTurnoFrecuente(data){
+
+    return await fetch(`turnos-frecuentes`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data)
+    })
+
+}
+
+async function eliminarTurnoFrecuente(id){
+
+    return await fetch(`turnos-frecuentes/${id}`, {
+        method: "DELETE",
+        headers: authHeaders()
+    })
+
+}
+
+
+// =====================================================
 // PLANIFICACION
 // =====================================================
 
 async function obtenerPlanificacion() {
 
-    const response = await fetch(`/planificacion`, { headers: authHeaders() })
+    const response = await fetch(`planificacion`, { headers: authHeaders() })
 
     return await response.json()
 
@@ -361,7 +401,7 @@ async function obtenerPlanificacion() {
 
 async function guardarPlanificacion(data) {
 
-    const response = await fetch(`/planificacion`, {
+    const response = await fetch(`planificacion`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -373,7 +413,7 @@ async function guardarPlanificacion(data) {
 
 async function guardarPlanificacionLote(asignaciones) {
 
-    return await fetch(`/planificacion/lote`, {
+    return await fetch(`planificacion/lote`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ asignaciones })
@@ -388,7 +428,7 @@ async function guardarPlanificacionLote(asignaciones) {
 
 async function obtenerConfiguracionCobertura() {
 
-    const response = await fetch(`/cobertura/config`, {
+    const response = await fetch(`cobertura/config`, {
         headers: authHeaders()
     })
 
@@ -398,7 +438,7 @@ async function obtenerConfiguracionCobertura() {
 
 async function crearConfiguracionCobertura(data) {
 
-    const response = await fetch(`/cobertura/config`, {
+    const response = await fetch(`cobertura/config`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -410,7 +450,7 @@ async function crearConfiguracionCobertura(data) {
 
 async function actualizarConfiguracionCobertura(id, data) {
 
-    const response = await fetch(`/cobertura/config/${id}`, {
+    const response = await fetch(`cobertura/config/${id}`, {
         method: "PUT",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -422,7 +462,7 @@ async function actualizarConfiguracionCobertura(id, data) {
 
 async function eliminarConfiguracionCobertura(id) {
 
-    const response = await fetch(`/cobertura/config/${id}`, {
+    const response = await fetch(`cobertura/config/${id}`, {
         method: "DELETE",
         headers: authHeaders()
     })
@@ -437,7 +477,7 @@ async function eliminarConfiguracionCobertura(id) {
 
 async function obtenerConfiguracionColacion() {
 
-    const response = await fetch(`/colacion/config`, {
+    const response = await fetch(`colacion/config`, {
         headers: authHeaders()
     })
 
@@ -447,7 +487,7 @@ async function obtenerConfiguracionColacion() {
 
 async function guardarConfiguracionColacion(data) {
 
-    const response = await fetch(`/colacion/config`, {
+    const response = await fetch(`colacion/config`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(data)
@@ -459,7 +499,7 @@ async function guardarConfiguracionColacion(data) {
 
 async function eliminarConfiguracionColacion(id) {
 
-    const response = await fetch(`/colacion/config/${id}`, {
+    const response = await fetch(`colacion/config/${id}`, {
         method: "DELETE",
         headers: authHeaders()
     })
@@ -474,7 +514,7 @@ async function eliminarConfiguracionColacion(id) {
 
 async function listarEmpresasSaas(){
 
-    const response = await fetch(`/superadmin/empresas`, {
+    const response = await fetch(`superadmin/empresas`, {
         headers: authHeaders()
     })
     if(response.status === 401){
@@ -495,7 +535,7 @@ async function listarEmpresasSaas(){
 
 async function crearEmpresaSaas(datos){
 
-    const response = await fetch(`/superadmin/empresas`, {
+    const response = await fetch(`superadmin/empresas`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(datos)
@@ -514,7 +554,7 @@ async function crearEmpresaSaas(datos){
 
 async function actualizarEmpresaSaas(empresaId, datos){
 
-    const response = await fetch(`/superadmin/empresas/${empresaId}`, {
+    const response = await fetch(`superadmin/empresas/${empresaId}`, {
         method: "PATCH",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(datos)
@@ -539,6 +579,27 @@ async function toggleEmpresaSaasActiva(empresaId){
     )
     if(!response.ok){
         let msg = "No se pudo cambiar el estado de la empresa"
+        try{
+            const err = await response.json()
+            if(err.detail){ msg = err.detail }
+        }catch(e){}
+        throw new Error(msg)
+    }
+    return await response.json()
+
+}
+
+// Acción destructiva: borra TODOS los trabajadores de una empresa
+// (junto con sus turnos fijos y turnos planificados, vía FK CASCADE).
+// La empresa y sus usuarios no se tocan. Devuelve {ok, eliminados}.
+async function eliminarTrabajadoresEmpresaSaas(empresaId){
+
+    const response = await fetch(
+        `/superadmin/empresas/${empresaId}/trabajadores`,
+        { method: "DELETE", headers: authHeaders() }
+    )
+    if(!response.ok){
+        let msg = "No se pudo borrar la base de trabajadores"
         try{
             const err = await response.json()
             if(err.detail){ msg = err.detail }
@@ -635,3 +696,112 @@ async function listarAuditSaas(limit=50){
     return await response.json()
 }
 
+
+
+// =====================================================
+// FERIADOS
+// =====================================================
+// Cache simple en sessionStorage: clave `feriados_<anio>` con TTL de
+// 10 minutos. La idea es evitar pedir el mismo anio dos veces mientras el
+// usuario navega entre meses, pero refrescar razonablemente si vuelve al
+// dia siguiente.
+const FERIADOS_CACHE_TTL_MS = 10 * 60 * 1000
+
+function _cacheKeyFeriados(anio){
+    return `feriados_${anio}`
+}
+
+function _leerCacheFeriados(anio){
+    try{
+        const raw = sessionStorage.getItem(_cacheKeyFeriados(anio))
+        if(!raw){ return null }
+        const obj = JSON.parse(raw)
+        if(!obj || !obj.ts || !Array.isArray(obj.data)){ return null }
+        if(Date.now() - obj.ts > FERIADOS_CACHE_TTL_MS){ return null }
+        return obj.data
+    }catch(e){ return null }
+}
+
+function _escribirCacheFeriados(anio, data){
+    try{
+        sessionStorage.setItem(
+            _cacheKeyFeriados(anio),
+            JSON.stringify({ ts: Date.now(), data })
+        )
+    }catch(e){}
+}
+
+function invalidarCacheFeriados(anio){
+    try{
+        if(anio){
+            sessionStorage.removeItem(_cacheKeyFeriados(anio))
+        }else{
+            for(let i = 0; i < sessionStorage.length; i++){
+                const k = sessionStorage.key(i)
+                if(k && k.startsWith("feriados_")){
+                    sessionStorage.removeItem(k)
+                }
+            }
+        }
+    }catch(e){}
+}
+
+async function obtenerFeriados(anio, opts = {}){
+    // `opts.force = true` salta cache (usado despues de POST/DELETE).
+    if(!opts.force){
+        const cached = _leerCacheFeriados(anio)
+        if(cached){ return cached }
+    }
+
+    const response = await fetch(
+        `feriados?anio=${anio}`,
+        { headers: authHeaders() }
+    )
+
+    if(!response.ok){
+        return leerMensajeRespuestaError(
+            response,
+            "No se pudieron obtener los feriados"
+        ).then(err => { throw new Error(err) })
+    }
+
+    const data = await response.json()
+    _escribirCacheFeriados(anio, data)
+    return data
+}
+
+async function crearFeriado(data){
+    const response = await fetch(`feriados`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data)
+    })
+
+    if(!response.ok){
+        return leerMensajeRespuestaError(
+            response,
+            "No se pudo guardar el feriado"
+        ).then(err => { throw new Error(err) })
+    }
+
+    const out = await response.json()
+    invalidarCacheFeriados(new Date(data.fecha).getFullYear())
+    return out
+}
+
+async function eliminarFeriado(fecha){
+    const response = await fetch(`feriados/${fecha}`, {
+        method: "DELETE",
+        headers: authHeaders()
+    })
+
+    if(!response.ok){
+        return leerMensajeRespuestaError(
+            response,
+            "No se pudo eliminar el feriado"
+        ).then(err => { throw new Error(err) })
+    }
+
+    invalidarCacheFeriados(new Date(fecha).getFullYear())
+    return { ok: true }
+}
