@@ -17,24 +17,24 @@
 
 - [Resumen ejecutivo](#resumen-ejecutivo)
 - [Capturas de pantalla](#capturas-de-pantalla)
-- [Stack tecnológico](#stack-tecnológico)
+- [Stack tecnológico](#stack-tecnologico)
 - [Arquitectura](#arquitectura)
-- [Instalación y ejecución](#instalación-y-ejecución)
+- [Instalación y ejecución](#instalacion-y-ejecucion)
 - [Despliegue con Docker](#despliegue-con-docker)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Modelo de datos](#modelo-de-datos)
 - [API REST](#api-rest)
-- [Motor de asignación automática](#motor-de-asignación-automática)
+- [Motor de asignación automática](#motor-de-asignacion-automatica)
 - [Cobertura operativa](#cobertura-operativa)
 - [Reglas de negocio](#reglas-de-negocio)
-- [Exportación PDF](#exportación-pdf)
-- [Panel de administración SaaS](#panel-de-administración-saas)
-- [Seguridad y autenticación](#seguridad-y-autenticación)
+- [Exportación PDF](#exportacion-pdf)
+- [Panel de administración SaaS](#panel-de-administracion-saas)
+- [Seguridad y autenticación](#seguridad-y-autenticacion)
 - [Tests](#tests)
-- [Despliegue en producción](#despliegue-en-producción)
+- [Despliegue en producción](#despliegue-en-produccion)
 - [Roadmap](#roadmap)
 - [Estructura de archivos detallada](#estructura-de-archivos-detallada)
-- [Contribución](#contribución)
+- [Contribución](#contribucion)
 - [Licencia](#licencia)
 
 ---
@@ -75,7 +75,7 @@ mensual de turnos.
 > blancas, leyenda con 4 chips, tabla con celdas de colores por tipo
 > de turno, columna HRS con barra de progreso, footer monoespaciado)
 > están disponibles en `docs/mockup-planificacion.png` o pueden
-> regenerarse siguiendo el estilo descrito en [Exportación PDF](#exportación-pdf).
+> regenerarse siguiendo el estilo descrito en [Exportación PDF](#exportacion-pdf).
 
 ### Vista de planificación (frontend)
 
