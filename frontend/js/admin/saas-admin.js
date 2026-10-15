@@ -730,6 +730,11 @@ function mostrarModalCredenciales({ empresa, admin }){
     const modal = document.getElementById("modal-credenciales-admin")
     if(!modal){ return }
 
+    // SaaS Admin tiene su propio contexto de apilamiento de pantalla completa.
+    // El modal debe estar dentro para quedar encima, como los de usuarios.
+    const vista = document.getElementById("vista-saas-admin")
+    if(vista && modal.parentElement !== vista){ vista.appendChild(modal) }
+
     const setText = (id, texto) => {
         const el = document.getElementById(id)
         if(el){ el.textContent = texto || "—" }

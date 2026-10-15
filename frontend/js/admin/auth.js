@@ -143,6 +143,7 @@ async function cerrarSesionAdmin(){
     // Defensa: si el usuario está en modo-saas (vista SaaS Admin
     // como overlay absoluto), quitamos la clase y ocultamos la vista
     // para que no quede "pegada" en pantalla tras el logout.
+    if(typeof cerrarModalCredenciales === "function") cerrarModalCredenciales()
     document.body.classList.remove("modo-saas")
     const vista = document.getElementById("vista-saas-admin")
     if(vista){
@@ -306,6 +307,7 @@ window.addEventListener("auth:token-muerto", () => {
     actualizarBloqueoPlanificacion()
 
     // Si estamos en modo-saas, salir para que el overlay no quede pegado.
+    if(typeof cerrarModalCredenciales === "function") cerrarModalCredenciales()
     document.body.classList.remove("modo-saas")
     const vista = document.getElementById("vista-saas-admin")
     if(vista){

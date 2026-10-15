@@ -55,3 +55,26 @@ test('formulario admite envío con teclado y valida campos antes de hacer POST',
     assert.match(doc.getElementById('saas-usuario-estado').textContent,/obligatorios/);assert(!solicitudes.some(s=>s.method==='POST'));
     const boton=doc.getElementById('saas-usuario-crear');assert.equal(boton.type,'submit');assert.match(boton.closest('form').getAttribute('onsubmit'),/crearUsuarioEmpresaSaas/);
 });
+
+test('crear empresa muestra sus credenciales encima de SaaS inmediatamente y refresca sus usuarios',async()=>{
+    const {c,doc}=contexto();
+    const vista=doc.getElementById('vista-saas-admin');doc.body.appendChild(vista);doc.body.classList.add('modo-saas');
+    const empresa={id:8,slug:'nueva',nombre:'Nueva empresa',activo:true,admin:{username:'admin-nueva',password_generada:'clave-temporal'}};
+    let creadas=0,refrescos=0;
+    c.crearEmpresaSaas=async datos=>{creadas++;assert.equal(datos.slug,'nueva');return empresa};
+    c.listarEmpresasSaas=async()=>{refrescos++;return [{id:8,slug:'nueva',nombre:'Nueva empresa',activo:true}]};
+    c.obtenerStatsEmpresaSaas=async()=>({usuarios:1,trabajadores:0,turnos_fijos:0});
+    c.listarUsuariosEmpresaSaas=async id=>{assert.equal(id,8);return [{id:9,username:'admin-nueva',nombre:'Administrador',activo:true}]};
+    doc.getElementById('saas-empresa-slug').value='nueva';doc.getElementById('saas-empresa-nombre').value='Nueva empresa';
+    await c.crearEmpresaSaaS();
+    assert.equal(creadas,1);assert.equal(refrescos,1);
+    const modal=doc.getElementById('modal-credenciales-admin');assert.equal(modal.parentElement,vista);
+    assert.equal(modal.style.display,'flex');assert(!modal.classList.contains('hidden'));
+    assert.equal(doc.getElementById('credencial-username').textContent,'admin-nueva');
+    assert.equal(doc.getElementById('credencial-password').textContent,'clave-temporal');
+    assert.equal(doc.getElementById('saas-stat-usuarios').textContent,'1');
+    c.cerrarModalCredenciales();assert.equal(modal.style.display,'none');assert.equal(doc.getElementById('credencial-password').textContent,'—');
+    await c.abrirModalUsuariosEmpresaSaas(8);
+    assert.match(doc.getElementById('cuerpo-usuarios-empresa-saas').textContent,/admin-nueva/);
+    assert(doc.body.classList.contains('modo-saas'));
+});
