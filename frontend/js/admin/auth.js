@@ -114,7 +114,7 @@ async function validarAdmin(){
         await cargarSistema()
     }
 
-    mostrarVistaTrabajadores()
+    mostrarVistaPlanificacion()
 
 }
 

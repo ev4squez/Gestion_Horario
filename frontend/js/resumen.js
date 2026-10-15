@@ -115,7 +115,7 @@ function calcularHorasSemana(
         // CRUZA MEDIANOCHE
         // =====================================
 
-        if(fin < inicio){
+        if(fin <= inicio){
 
             fin += 24
 
@@ -301,6 +301,10 @@ function actualizarColor(input) {
 
     const valor =
         input.value.toLowerCase()
+
+    input.dataset.turnoEstado = valor.includes("vacaciones") ? "vacaciones"
+        : valor.includes("saliente") ? "saliente"
+        : valor.includes("libre") ? "libre" : "trabajo"
 
     input.classList.remove(
 
@@ -579,15 +583,15 @@ function calcularIndicadoresTrabajador(trabajador){
             : jornada && maxHorasSemana >= jornada * 0.9
                 ? {
                     texto: "Ajustada",
-                    detalle: `Pico ${maxHorasSemana}h / ${jornada}h`,
+                    detalle: `Mayor carga ${maxHorasSemana}h / ${jornada}h`,
                     clase: "bg-amber-50 text-amber-700 border-amber-200",
                     icono: "speed"
                 }
                 : {
                     texto: "Normal",
                     detalle: jornada
-                        ? `Pico ${maxHorasSemana}h / ${jornada}h`
-                        : `Pico ${maxHorasSemana}h`,
+                        ? `Mayor carga ${maxHorasSemana}h / ${jornada}h`
+                        : `Mayor carga ${maxHorasSemana}h`,
                     clase: "bg-emerald-50 text-emerald-700 border-emerald-200",
                     icono: "check_circle"
                 }
@@ -608,126 +612,74 @@ function calcularIndicadoresTrabajador(trabajador){
 }
 
 
-function renderizarResumenDomingos(
-    lista = trabajadoresGlobal
-) {
+function filtrarCargaMensual(valor){
+    window.filtroCargaMensual = valor
+    renderizarResumenDomingos(trabajadoresPlanificacionVisibles())
+}
 
-    const contenedor =
-        document.getElementById(
-            "resumen-domingos"
-        )
-
-    if (!contenedor) return
-
-    // Ocultar la card si no hay trabajadores en la lista filtrada.
+function renderizarResumenDomingos(lista = trabajadoresGlobal){
+    const contenedor = document.getElementById("resumen-domingos")
+    if(!contenedor) return
     const card = document.getElementById("card-domingos")
+    lista = (lista || []).filter(t => t.activo !== false)
+    if(card) card.classList.toggle("hidden", !lista.length)
+    if(!lista.length){ contenedor.innerHTML = ""; return }
 
-    if (!lista || lista.length === 0) {
-
-        if (card) card.classList.add("hidden")
-        contenedor.innerHTML = ""
-
-        return
-
-    }
-
-    if (card) card.classList.remove("hidden")
-
-    contenedor.innerHTML = ""
-
-    let html = ""
-
-    lista.forEach(t => {
-
-        const indicadores =
-            calcularIndicadoresTrabajador(t)
-
-        html += `
-
-            <div class="fade-card bg-white border border-slate-200 rounded-2xl p-3">
-
-                <!-- PERSONA -->
-                <div class="flex items-start justify-between gap-2.5 min-w-0 mb-3">
-
-                    <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                            <span class="material-symbols-outlined text-slate-600 text-lg">badge</span>
-                        </div>
-
-                        <div class="min-w-0">
-                            <h3 class="text-xs font-black text-slate-900 uppercase truncate leading-tight">
-                                ${escaparHTML(t.nombre)}
-                            </h3>
-                            <p class="text-slate-500 text-[11px] truncate">
-                                ${escaparHTML(t.responsable || "Sin responsable")}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="rounded-full border px-2 py-1 text-[10px] font-black uppercase flex items-center gap-1 shrink-0 ${indicadores.carga.clase}">
-                        <span class="material-symbols-outlined text-[13px] leading-none">${indicadores.carga.icono}</span>
-                        ${indicadores.carga.texto}
-                    </div>
-
-                </div>
-
-                <!-- ESTADISTICAS -->
-                <div class="grid grid-cols-2 gap-2">
-
-                    <div class="bg-slate-50 rounded-xl px-2.5 py-2 min-w-0">
-                        <div class="flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-slate-600 text-sm">dark_mode</span>
-                            <p class="text-slate-500 text-[11px] truncate">Nocturnos</p>
-                        </div>
-                        <h4 class="text-lg font-black text-slate-800 mt-0.5 leading-none">${indicadores.nocturnos}</h4>
-                    </div>
-
-                    <div class="bg-blue-50 rounded-xl px-2.5 py-2 min-w-0">
-                        <div class="flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-blue-600 text-sm">work</span>
-                            <p class="text-slate-500 text-[11px] truncate">Domingos</p>
-                        </div>
-                        <h4 class="text-lg font-black text-blue-600 mt-0.5 leading-none">${indicadores.domingos}</h4>
-                        <p class="text-[10px] text-blue-500 mt-0.5">${indicadores.domingosLibres} libres</p>
-                    </div>
-
-                    <div class="bg-emerald-50 rounded-xl px-2.5 py-2 min-w-0">
-                        <div class="flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-emerald-600 text-sm">event_available</span>
-                            <p class="text-slate-500 text-[11px] truncate">Libres mes</p>
-                        </div>
-                        <h4 class="text-lg font-black text-emerald-600 mt-0.5 leading-none">${indicadores.libres}</h4>
-                    </div>
-
-                    <div class="bg-amber-50 rounded-xl px-2.5 py-2 min-w-0">
-                        <div class="flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-amber-600 text-sm">monitoring</span>
-                            <p class="text-slate-500 text-[11px] truncate">Horas mes</p>
-                        </div>
-                        <h4 class="text-lg font-black text-amber-700 mt-0.5 leading-none">${indicadores.horasMes}</h4>
-                    </div>
-
-                </div>
-
-                <div class="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-2.5 py-2">
-                    <div class="flex items-center justify-between gap-2 text-[11px]">
-                        <span class="font-bold text-slate-600 truncate">${escaparHTML(indicadores.carga.detalle)}</span>
-                        ${
-                            indicadores.excesoMaximo > 0
-                                ? `<span class="font-black text-red-600 shrink-0">+${indicadores.excesoMaximo}h</span>`
-                                : `<span class="font-black text-emerald-600 shrink-0">Sin exceso</span>`
-                        }
-                    </div>
-                </div>
-
+    // Conservar los detalles abiertos al guardar un turno o cambiar filtros.
+    const abiertos = new Set(Array.from(contenedor.querySelectorAll("details[open]"))
+        .map(d => d.dataset.cargaId))
+    const datos = lista.map(t => ({t, i: calcularIndicadoresTrabajador(t)}))
+    const sobrecargados = datos.filter(({i}) => i.semanasSobrecarga > 0).length
+    const horas = Math.round(datos.reduce((n, {i}) => n + i.horasMes, 0) * 10) / 10
+    const noches = datos.reduce((n, {i}) => n + i.nocturnos, 0)
+    const filtro = window.filtroCargaMensual || "todos"
+    const visibles = datos.filter(({i}) => filtro === "sobrecarga"
+        ? i.semanasSobrecarga > 0
+        : filtro === "sin-turnos" ? i.horasMes === 0 : true)
+        .sort((a, b) => b.i.semanasSobrecarga - a.i.semanasSobrecarga ||
+            b.i.excesoMaximo - a.i.excesoMaximo || a.t.nombre.localeCompare(b.t.nombre, "es"))
+    const opciones = [["todos", "Todo el equipo"], ["sobrecarga", "Con sobrecarga"], ["sin-turnos", "Sin turnos"]]
+    contenedor.innerHTML = `
+        <div class="workload-period">${escaparHTML(meses[mesActual])} ${anioActual} · ${lista.length} colaboradores</div>
+        <div class="workload-totals">
+            <div class="${sobrecargados ? "workload-danger" : ""}" title="Colaboradores con alguna semana sobre su jornada">
+                <strong>${sobrecargados}</strong><span>Con exceso</span>
             </div>
-
-        `
-
-    })
-
-    contenedor.innerHTML = html
-
+            <div title="Turnos que terminan al día siguiente"><strong>${noches}</strong><span>Nocturnos</span></div>
+            <div title="Horas del mes descontando colación"><strong>${horas}h</strong><span>Horas equipo</span></div>
+        </div>
+        <label class="workload-filter">
+            <span>Mostrar</span>
+            <select aria-label="Filtrar carga mensual" onchange="filtrarCargaMensual(this.value)">
+                ${opciones.map(([v, texto]) => `<option value="${v}" ${filtro === v ? "selected" : ""}>${texto}</option>`).join("")}
+            </select>
+        </label>
+        <div class="workload-list">${visibles.map(({t, i}) => {
+            const estado = !i.horasMes ? "Sin turnos" : !parseInt(t.jornada) ? "Sin jornada" : i.semanasSobrecarga ? "Sobrecarga" : "Sin exceso"
+            const tono = estado === "Sobrecarga" ? "danger" : ["Sin turnos", "Sin jornada"].includes(estado) ? "muted" : "normal"
+            const pico = parseInt(t.jornada) ? `${i.maxHorasSemana}h / ${t.jornada}h` : `${i.maxHorasSemana}h · sin jornada definida`
+            return `<details class="workload-person" data-carga-id="${escaparHTML(String(t.id))}" ${abiertos.has(String(t.id)) ? "open" : ""}>
+                <summary>
+                    <div class="workload-person-name"><span title="${escaparHTML(t.nombre)}">${escaparHTML(t.nombre)}</span>
+                        <small class="workload-${tono}">${estado}${i.semanasSobrecarga ? ` · ${i.semanasSobrecarga} sem.` : ""}</small>
+                    </div>
+                    <strong class="workload-hours">${i.horasMes}<small> h</small></strong>
+                    <span class="material-symbols-outlined workload-chevron" aria-hidden="true">expand_more</span>
+                </summary>
+                <div class="workload-detail">
+                    <p>${escaparHTML(t.responsable || "Sin responsable")}</p>
+                    <div class="workload-metrics">
+                        <div title="Turnos que cruzan medianoche"><span>Nocturnos</span><strong>${i.nocturnos}</strong></div>
+                        <div title="Domingos con trabajo, incluido el turno del sábado que continúa el domingo"><span>Domingos trabajados</span><strong>${i.domingos}</strong></div>
+                        <div title="Incluye los días que la grilla muestra como Libre"><span>Días libres</span><strong>${i.libres}</strong></div>
+                        <div><span>Domingos libres</span><strong>${i.domingosLibres}</strong></div>
+                    </div>
+                    <button type="button" class="workload-peak workload-edit" onclick="abrirDetalleCarga('${t.id}')" aria-label="Revisar y editar la carga semanal de ${escaparHTML(t.nombre)}"><span>Mayor carga semanal</span><strong>${escaparHTML(pico)}</strong><span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span></button>
+                    ${i.excesoMaximo ? `<p class="workload-danger">Exceso máximo: +${i.excesoMaximo}h en una semana</p>` : ""}
+                </div>
+            </details>`
+        }).join("") || '<p class="workload-empty">No hay colaboradores para este filtro.</p>'}</div>
+    `
 }
 
 function calcularDomingosTrabajados(
@@ -950,269 +902,50 @@ function calcularDomingosTrabajados(
 // ALERTAS DESCANSO
 // =====================================================
 
-function calcularAlertasDescanso(
-    trabajadores
-){
-
+function calcularAlertasDescanso(trabajadores){
     const alertas = []
+    const semanas = generarSemanas(mesActual, anioActual)
+    const inicioVisible = new Date(semanas[0].inicio)
+    inicioVisible.setHours(0, 0, 0, 0)
+    const finVisible = new Date(semanas[semanas.length - 1].fin)
+    finVisible.setHours(23, 59, 59, 999)
+    const esVisible = fecha => {
+        const dia = new Date(`${fecha}T00:00:00`)
+        return dia >= inicioVisible && dia <= finVisible
+    }
 
     trabajadores.forEach(trabajador => {
+        // Fechas locales e IDs normalizados, igual que los turnos de la grilla.
+        // Incluir el mes vecino permite detectar descansos en sus limites.
+        const turnos = planificacionGlobal
+            .filter(p => String(p.trabajador_id) === String(trabajador.id))
+            .map(p => {
+                const fecha = String(p.fecha || "").slice(0, 10)
+                const intervalo = intervaloDesdeTurno(fecha, p.turno)
+                return intervalo ? {fecha, ...intervalo} : null
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.inicio - b.inicio)
 
-        // =====================================
-        // OBTENER TURNOS TRABAJADOR
-        // =====================================
-
-const turnos = planificacionGlobal
-
-    .filter(p => {
-
-        // =====================================
-        // TRABAJADOR
-        // =====================================
-
-        if(
-            p.trabajador_id
-            !==
-            trabajador.id
-        ){
-            return false
+        for(let i = 0; i < turnos.length - 1; i++){
+            const actual = turnos[i]
+            const siguiente = turnos[i + 1]
+            if(!esVisible(actual.fecha) && !esVisible(siguiente.fecha)) continue
+            const descanso = (siguiente.inicio - actual.fin) / 3600000
+            if(descanso >= 12) continue
+            alertas.push({
+                kind: "descanso",
+                trabajador_id: trabajador.id,
+                trabajador: trabajador.nombre,
+                responsable: trabajador.responsable,
+                fecha1: actual.fecha,
+                fecha2: siguiente.fecha,
+                descanso,
+                tipo: descanso < 10 ? "danger" : "warning"
+            })
         }
-
-        // =====================================
-        // FECHA
-        // =====================================
-
-        const fecha =
-            new Date(p.fecha)
-
-        // =====================================
-        // SOLO MES ACTUAL
-        // =====================================
-
-        return (
-
-            fecha.getMonth()
-            ===
-            mesActual
-
-            &&
-
-            fecha.getFullYear()
-            ===
-            anioActual
-
-        )
-
     })
-
-    .sort((a,b)=>
-
-        new Date(a.fecha)
-        -
-        new Date(b.fecha)
-
-    )
-
-        // =====================================
-        // RECORRER TURNOS
-        // =====================================
-
-        for(let i=0; i<turnos.length - 1; i++){
-
-            const actual =
-                turnos[i]
-
-            const siguiente =
-                turnos[i + 1]
-
-            // =====================================
-            // IGNORAR LIBRES
-            // =====================================
-
-            if(
-                !actual.turno
-                ||
-                !siguiente.turno
-            ){
-                continue
-            }
-
-            const turnoActual =
-                actual.turno
-                    .trim()
-                    .toLowerCase()
-
-            const turnoSiguiente =
-                siguiente.turno
-                    .trim()
-                    .toLowerCase()
-
-            // =====================================
-            // IGNORAR LIBRE
-            // =====================================
-
-            if(
-                turnoActual === "libre"
-                ||
-                turnoActual === "vacaciones"
-                ||
-                turnoActual === "saliente"
-            ){
-                continue
-            }
-
-            if(
-                turnoSiguiente === "libre"
-                ||
-                turnoSiguiente === "vacaciones"
-                ||
-                turnoSiguiente === "saliente"
-            ){
-                continue
-            }
-
-            // =====================================
-            // REGEX
-            // =====================================
-
-            const regex =
-                /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/
-
-            const matchActual =
-                actual.turno.match(regex)
-
-            const matchSiguiente =
-                siguiente.turno.match(regex)
-
-            if(
-                !matchActual
-                ||
-                !matchSiguiente
-            ){
-                continue
-            }
-
-            // =====================================
-            // FECHA SALIDA
-            // =====================================
-
-            const fechaSalida =
-                new Date(actual.fecha)
-
-            let horaSalida =
-                parseInt(matchActual[3])
-
-            let minutoSalida =
-                parseInt(matchActual[4])
-
-            fechaSalida.setHours(
-                horaSalida,
-                minutoSalida,
-                0,
-                0
-            )
-
-            // =====================================
-            // SI CRUZA MEDIANOCHE
-            // =====================================
-
-            const horaInicioActual =
-                parseInt(matchActual[1])
-
-            if(
-                horaSalida
-                <
-                horaInicioActual
-            ){
-
-                fechaSalida.setDate(
-                    fechaSalida.getDate() + 1
-                )
-
-            }
-
-            // =====================================
-            // FECHA ENTRADA
-            // =====================================
-
-            const fechaEntrada =
-                new Date(siguiente.fecha)
-
-            let horaEntrada =
-                parseInt(matchSiguiente[1])
-
-            let minutoEntrada =
-                parseInt(matchSiguiente[2])
-
-            fechaEntrada.setHours(
-                horaEntrada,
-                minutoEntrada,
-                0,
-                0
-            )
-
-            // =====================================
-            // DIFERENCIA
-            // =====================================
-
-            const diferenciaMs =
-                fechaEntrada - fechaSalida
-
-            const diferenciaHoras =
-                diferenciaMs
-                /
-                (1000 * 60 * 60)
-
-            // =====================================
-            // MENOR A 12 HORAS
-            // =====================================
-
-            if(
-                diferenciaHoras < 12
-            ){
-
-                let tipo =
-                    "warning"
-
-                if(
-                    diferenciaHoras < 10
-                ){
-
-                    tipo = "danger"
-
-                }
-
-                alertas.push({
-
-                    kind: "descanso",
-
-                    trabajador:
-                        trabajador.nombre,
-
-                    responsable:
-                        trabajador.responsable,
-
-                    fecha1:
-                        actual.fecha,
-
-                    fecha2:
-                        siguiente.fecha,
-
-                    descanso:
-                        diferenciaHoras,
-
-                    tipo
-
-                })
-
-            }
-
-        }
-
-    })
-
     return alertas
-
 }
 
 
@@ -1298,6 +1031,7 @@ function calcularAlertasHoras(
             alertas.push({
 
                 kind: "horas",
+                    trabajador_id: trabajador.id,
 
                 tipo:
                     horas > jornada
@@ -1358,212 +1092,8 @@ function calcularTodasAlertas(trabajadores) {
 
 }
 
-function renderizarAlertas(
-    trabajadores
-) {
-
-    const contenedor =
-        document.getElementById(
-            "contenedor-alertas"
-        )
-
-    if (!contenedor) return
-
-    const alertas =
-        calcularTodasAlertas(
-            trabajadores
-        )
-
-    // =====================================
-    // SIN ALERTAS
-    // =====================================
-
+function renderizarAlertas(trabajadores) {
+    // El detalle se presenta ahora dentro de cada semana de planificacion.
     const card = document.getElementById("card-alertas")
-    const badge = document.getElementById("badge-alertas")
-
-    // Sin alertas: ocultar la card completa.
-    // (style.display prevalece sobre las utilidades hidden / xl:flex.)
-    if (alertas.length === 0) {
-
-        if (card) card.style.display = "none"
-        contenedor.innerHTML = ""
-        if (badge) badge.textContent = ""
-
-        return
-
-    }
-
-    // Hay alertas: mostrar la card y actualizar el contador.
-    if (card) card.style.display = ""
-    if (badge) badge.textContent = alertas.length
-
-    // =====================================
-    // RENDER ALERTAS
-    // =====================================
-
-    let html = ""
-
-    alertas.forEach(alerta => {
-
-        // =====================================
-        // COLOR SEGÚN SEVERIDAD
-        // =====================================
-
-        let colorCard = `
-            border-amber-200
-            bg-amber-50
-        `
-
-        let colorIcon = `
-            bg-amber-100
-            text-amber-600
-        `
-
-        if (
-            alerta.tipo === "danger"
-        ) {
-
-            colorCard = `
-                border-red-200
-                bg-red-50
-            `
-
-            colorIcon = `
-                bg-red-100
-                text-red-600
-            `
-
-        } else if (
-            alerta.tipo === "info"
-        ) {
-
-            colorCard = `
-                border-blue-200
-                bg-blue-50
-            `
-
-            colorIcon = `
-                bg-blue-100
-                text-blue-600
-            `
-
-        }
-
-        // =====================================
-        // CONTENIDO SEGÚN TIPO DE ALERTA
-        // =====================================
-
-        let icono
-        let estado
-        let titulo
-        let detalle
-        let subtitulo
-        let iconoSub
-        let iconoDetalle
-
-        if (alerta.kind === "cobertura") {
-
-            icono =
-                alerta.tipo === "danger" ? "report" : "fact_check"
-
-            estado =
-                alerta.tipo === "danger" ? "Cobertura crítica" : "Cobertura"
-
-            titulo = alerta.titulo
-            subtitulo = alerta.detalle
-            detalle = alerta.mensaje
-            iconoSub = "schedule"
-            iconoDetalle = "group"
-
-        } else if (alerta.kind === "horas") {
-
-            const exceso =
-                alerta.tipo === "warning"
-
-            const dif =
-                Math.abs(alerta.diferencia).toFixed(1)
-
-            icono = exceso ? "more_time" : "schedule"
-            estado = exceso ? "Horas extra" : "Bajo jornada"
-            titulo = alerta.trabajador
-            subtitulo = `Semana ${alerta.semana}`
-
-            detalle =
-                `<span class="font-black">${alerta.horas}h</span> / ${alerta.jornada}h · ${
-                    exceso ? `+${dif}h` : `faltan ${dif}h`
-                }`
-
-            iconoSub = "calendar_month"
-            iconoDetalle = "schedule"
-
-        } else {
-
-            // Descanso entre turnos.
-            icono =
-                alerta.tipo === "danger" ? "priority_high" : "notifications_active"
-
-            estado =
-                alerta.tipo === "danger" ? "Crítico" : "Advertencia"
-
-            titulo = alerta.trabajador
-            subtitulo = `${escaparHTML(alerta.fecha1)} → ${escaparHTML(alerta.fecha2)}`
-            detalle = `Descanso: <span class="font-black">${alerta.descanso.toFixed(1)}h</span>`
-            iconoSub = "schedule"
-            iconoDetalle = "hotel"
-
-        }
-
-        html += `
-
-            <div class="fade-card border rounded-2xl p-3 ${colorCard}">
-
-                <div class="flex items-start gap-2.5">
-
-                    <!-- ICONO -->
-                    <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${colorIcon}">
-                        <span class="material-symbols-outlined text-lg">${icono}</span>
-                    </div>
-
-                    <!-- CONTENIDO -->
-                    <div class="flex-1 min-w-0">
-
-                        <!-- TOP -->
-                        <div class="flex items-center justify-between gap-2">
-                            <h3 class="font-black text-slate-800 text-xs truncate">
-                                ${escaparHTML(titulo)}
-                            </h3>
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${colorIcon}">
-                                ${estado}
-                            </span>
-                        </div>
-
-                        <!-- DETALLE -->
-                        <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
-                            <span class="material-symbols-outlined text-sm text-slate-400">
-                                ${iconoSub}
-                            </span>
-                            <span>${subtitulo}</span>
-                        </div>
-
-                        <div class="mt-1.5 flex items-center gap-1.5">
-                            <span class="material-symbols-outlined text-sm text-slate-400">
-                                ${iconoDetalle}
-                            </span>
-                            <p class="text-[11px] font-semibold text-slate-700">
-                                ${detalle}
-                            </p>
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        `
-
-    })
-
-    contenedor.innerHTML = html
-
+    if (card) card.style.display = "none"
 }

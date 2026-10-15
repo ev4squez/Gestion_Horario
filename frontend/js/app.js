@@ -131,7 +131,7 @@ function actualizarVistaPlanificacion(){
         precargarFeriados(anioActual)
             .then(() => {
                 if(typeof renderizarTrabajadores === 'function'){
-                    renderizarTrabajadores(listaRender)
+                    renderizarTrabajadores(trabajadoresPlanificacionVisibles())
                 }
             })
             .catch(() => {})
@@ -860,244 +860,118 @@ function htmlBloqueHoras(horas, jornada){
 // RENDER TARJETAS
 // =====================================================
 
-function renderizarTrabajadores(
-    trabajadores
-){
+// Las alertas diarias se muestran en las mismas columnas que los turnos.
+function alertasParaFecha(alertas, fecha){
+    return alertas.filter(a => a.kind === "cobertura"
+        ? a.fecha === fecha
+        : a.kind === "descanso" && (a.fecha1 === fecha || a.fecha2 === fecha))
+}
 
-    // Los trabajadores inactivos no aparecen en el planificador para asignarles
-    // horario (se conservan solo en la administración).
-    trabajadores =
-        (trabajadores || []).filter(t => t.activo !== false)
+function motivoAlertaPlanificacion(alerta){
+    const titulo = alerta.kind === "cobertura" ? alerta.titulo : alerta.trabajador
+    const detalle = alerta.kind === "descanso"
+        ? `Descanso: ${alerta.descanso.toFixed(1)}h · ${alerta.fecha1} → ${alerta.fecha2}`
+        : alerta.kind === "horas"
+            ? `${alerta.horas}h / ${alerta.jornada}h · ${alerta.diferencia > 0 ? "+" : ""}${alerta.diferencia}h`
+            : `${alerta.mensaje} · ${alerta.detalle}`
+    return `${titulo || ""}: ${detalle}`
+}
 
-    document.getElementById(
-        "total-trabajadores"
-    ).innerText = trabajadores.length
+function renderIconoAlertas(alertas, etiqueta, icono = "warning", texto = alertas.length){
+    if(!alertas.length) return ""
+    const tono = alertas.some(a => a.tipo === "danger")
+        ? "text-red-700 bg-red-50"
+        : alertas.some(a => a.tipo === "warning")
+            ? "text-amber-700 bg-amber-50"
+            : "text-blue-700 bg-blue-50"
+    const motivo = `${etiqueta} (${alertas.length})\n${alertas.map(motivoAlertaPlanificacion).join("\n")}`
+    return `<button type="button" class="planning-alert inline-flex items-center gap-1 rounded-lg px-1.5 py-1 align-middle cursor-help ${tono}"
+        title="${escaparHTML(motivo)}" aria-label="${escaparHTML(motivo)}">
+        <span class="material-symbols-outlined" aria-hidden="true">${icono}</span>
+        <span class="text-[10px] font-bold">${escaparHTML(String(texto))}</span>
+    </button>`
+}
 
-    const contenedor =
-        document.getElementById(
-            "contenedor-responsables"
-        )
+function alertasCoberturaSemana(alertas, semana){
+    const fechas = new Set(Array.from({length: 7}, (_, dia) => {
+        const fecha = new Date(semana.inicio)
+        fecha.setDate(fecha.getDate() + dia)
+        return `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,"0")}-${String(fecha.getDate()).padStart(2,"0")}`
+    }))
+    return alertas.filter(a => a.kind === "cobertura" && fechas.has(a.fecha))
+}
 
-    contenedor.innerHTML = ""
+function alternarPanelCarga(){
+    window.panelCargaPlegado = !window.panelCargaPlegado
+    mostrarPanelDerecho()
+}
 
-    const semanas =
-        generarSemanas(
-            mesActual,
-            anioActual
-        )
-
-    let html = ""
-
-    semanas.forEach((semana,index)=>{
-
-        html += `
-
-            <div class="card overflow-hidden mb-4">
-
-                <!-- HEADER SEMANA -->
-                <div class="px-5 md:px-8 py-5 md:py-6 border-b border-slate-100 bg-white">
-
-                    <h2 class="font-black text-2xl md:text-3xl text-slate-800">
-                        Semana ${index + 1}
-                    </h2>
-
-                    <p class="text-slate-500 mt-1 md:mt-2 text-sm">
-                        ${formatearFecha(semana.inicio)}
-                        al
-                        ${formatearFecha(semana.fin)}
-                    </p>
-
-                </div>
-
-                <!-- COLABORADORES -->
-                <div class="p-4 md:p-6 space-y-3">
-
-        `
-
-        trabajadores.forEach(t => {
-
-            let turnosSemana = []
-
-            let htmlDias = ""
-
-            // =====================================
-            // DIAS SEMANA
-            // =====================================
-
-            for(let dia=0; dia<7; dia++){
-
-                const fecha = new Date(
-                    semana.inicio
-                )
-
-                fecha.setDate(
-                    fecha.getDate() + dia
-                )
-
-                const fechaTexto =
-
-    `${fecha.getFullYear()}-${
-        String(
-            fecha.getMonth() + 1
-        ).padStart(2,"0")
-    }-${
-        String(
-            fecha.getDate()
-        ).padStart(2,"0")
-    }`
-
-                // =====================================
-                // VALIDAR MES
-                // =====================================
-
-                const esMesActual =
-                    fecha.getMonth()
-                    ===
-                    mesActual
-
-                // =====================================
-                // OBTENER TURNO
-                // =====================================
-
-                const turno =
-                    obtenerTurnoGuardado(
-                        t.id,
-                        fechaTexto
-                    )
-
-                turnosSemana.push(
-                    turno
-                )
-
-                // =====================================
-                // FERIADO (cache sincrona via feriadoDe())
-                // =====================================
-                const fInfo = feriadoDe(fechaTexto)
-                const esFeriadoDia = !!fInfo
-                const nombreFeriadoDia = fInfo ? fInfo.nombre : ''
-                const clasesFeriado = esFeriadoDia
-                    ? ' bg-red-50 ring-1 ring-red-300 rounded-xl -mx-1 px-1'
-                    : ''
-                const tituloFeriado = esFeriadoDia
-                    ? ` title="Feriado: ${nombreFeriadoDia.replace(/"/g, '&quot;')}"`
-                    : ''
-
-                // =====================================
-                // CELDA DIA (responsive)
-                // =====================================
-
-                htmlDias += `
-                    <div class="${esMesActual ? '' : 'opacity-60'}${clasesFeriado}"${tituloFeriado}>
-
-                        <div class="text-[11px] uppercase tracking-wide ${esFeriadoDia ? 'text-red-600 font-bold' : 'text-slate-500'} mb-1 text-center">
-                            ${NOMBRES_DIAS[dia]} ${fecha.getDate()}
-                        </div>
-
-                        <input
-                            value="${escaparHTML(turno)}"
-                            data-fecha="${fechaTexto}"
-                            maxlength="13"
-                            placeholder="00:00 - 00:00"
-                            class="turno-input w-full rounded-xl px-2 py-2 text-sm font-medium text-center outline-none border border-transparent focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${esMesActual ? "" : "bg-slate-100"}"
-                            onfocus="abrirListaTurnos(this);"
-                            oninput="limpiarErrorFormatoTurno(this); filtrarListaTurnos(this);"
-                            onblur="if(validarFormatoTurno(this) !== null){ actualizarColor(this); recalcularFila(this); guardarTurno(this); if(window.actualizarSubtextoDuracion){ window.actualizarSubtextoDuracion(this); } }"
-                        >
-
-                        <div class="turno-duracion text-[10px] text-slate-400 mt-1 text-center tabular-nums">
-                            ${formatearDuracionTurno(turno)}
-                        </div>
-
-                    </div>
-                `
-
-            }
-
-            // =====================================
-            // HORAS
-            // =====================================
-
-            const horasSemana =
-                calcularHorasSemana(
-                    turnosSemana,
-                    colacionPorCeco(t.ceco)
-                )
-
-            // =====================================
-            // TARJETA COLABORADOR
-            // =====================================
-
-            html += `
-
-                <div class="fila-trabajador border border-slate-100 rounded-2xl p-4" data-trabajador-id="${t.id}">
-
-                    <span class="jornada-data hidden">${t.jornada}</span>
-
-                    <!-- CABECERA -->
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-
-                        <div class="min-w-0">
-
-                            <div class="fw-semibold text-slate-800 truncate">
-                                ${escaparHTML(t.nombre)}
-                            </div>
-
-                            <div class="text-xs text-slate-500 mt-0.5 truncate">
-                                ${escaparHTML(t.responsable)}
-                            </div>
-
-                            <div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[13px] leading-none">restaurant</span>
-                                Colación: ${colacionMinutosPorCeco(t.ceco)} min
-                            </div>
-
-                        </div>
-
-                        <div class="columna-horas w-full sm:w-auto shrink-0">
-                            ${htmlBloqueHoras(horasSemana, t.jornada)}
-                        </div>
-
-                    </div>
-
-                    <!-- DIAS -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                        ${htmlDias}
-                    </div>
-
-                </div>
-
-            `
-
+function renderizarTrabajadores(trabajadores){
+    trabajadores = (trabajadores || []).filter(t => t.activo !== false)
+    document.getElementById("total-trabajadores").innerText = trabajadores.length
+    const contenedor = document.getElementById("contenedor-responsables")
+    const semanas = generarSemanas(mesActual, anioActual)
+    const alertas = calcularTodasAlertas(trabajadores)
+    contenedor.innerHTML = semanas.map((semana, index) => {
+        const fechas = Array.from({length:7}, (_, dia) => {
+            const fecha = new Date(semana.inicio)
+            fecha.setDate(fecha.getDate() + dia)
+            return {fecha, iso: resumenFechaISO(fecha), nombre: NOMBRES_DIAS[dia]}
         })
-
-        html += `
-
-                </div>
-
+        return `<section class="planning-week card" aria-label="Semana ${index + 1}">
+            <div class="planning-week-header">
+                <h2>Semana ${index + 1}</h2>
+                <p>${formatearFecha(semana.inicio)} al ${formatearFecha(semana.fin)}</p>
             </div>
-
-        `
-
-    })
-
-    // =====================================
-    // RENDER FINAL
-    // =====================================
-
-    contenedor.innerHTML = html
-
-    // =====================================
-    // ACTUALIZAR COLORES
-    // =====================================
-
-    document
-        .querySelectorAll(
-            ".turno-input"
-        )
-        .forEach(
-            actualizarColor
-        )
-
+            <div class="schedule-scroll" tabindex="0" role="region" aria-label="Turnos de la semana ${index + 1}">
+                <table class="schedule-table">
+                    <caption class="sr-only">Planificación semanal de colaboradores. Las horas descuentan colación.</caption>
+                    <thead><tr><th scope="col" class="schedule-name">Colaborador</th>
+                        ${fechas.map(({fecha, iso, nombre}) => `<th scope="col" class="${feriadoDe(iso) ? "schedule-holiday" : ""}">
+                            ${nombre} <strong>${fecha.getDate()}</strong>
+                            ${feriadoDe(iso) ? `<span class="schedule-holiday-label" title="${escaparHTML(feriadoDe(iso).nombre)}">Feriado<span class="sr-only">: ${escaparHTML(feriadoDe(iso).nombre)}</span></span>` : ""}
+                            ${renderIconoAlertas(alertasParaFecha(alertas, iso).filter(a => a.kind === "cobertura"), `Cobertura del ${iso}`, "groups")}
+                        </th>`).join("")}
+                        <th scope="col">Horas / jornada</th>
+                    </tr></thead>
+                    <tbody>${trabajadores.map(t => {
+                        const turnos = fechas.map(({iso}) => obtenerTurnoGuardado(t.id, iso))
+                        const horas = calcularHorasSemana(turnos, colacionPorCeco(t.ceco))
+                        return `<tr class="fila-trabajador" data-trabajador-id="${t.id}">
+                            <th scope="row" class="schedule-name">
+                                <span class="jornada-data hidden">${t.jornada}</span>
+                                <span class="schedule-person" title="${escaparHTML(t.nombre)}">${escaparHTML(t.nombre)}</span>
+                                <small title="${escaparHTML(t.responsable || "Sin responsable")}">${escaparHTML(t.responsable || "Sin responsable")}</small>
+                                <small>Colación ${colacionMinutosPorCeco(t.ceco)} min</small>
+                            </th>
+                            ${fechas.map(({fecha, iso}, dia) => {
+                                const descanso = alertasParaFecha(alertas, iso).filter(a => a.kind === "descanso" && String(a.trabajador_id) === String(t.id))
+                                const minimo = descanso.length ? Math.min(...descanso.map(a => a.descanso)).toFixed(1).replace(/\.0$/, "") : ""
+                                const feriado = feriadoDe(iso)
+                                return `<td class="schedule-day ${fecha.getMonth() !== mesActual ? "schedule-outside" : ""} ${feriado ? "schedule-holiday" : ""}">
+                                    <input value="${escaparHTML(turnos[dia])}" data-fecha="${iso}" maxlength="13"
+                                        aria-label="Turno de ${escaparHTML(t.nombre)}, ${iso}" placeholder="00:00 - 00:00"
+                                        class="turno-input"
+                                        onfocus="abrirListaTurnos(this)"
+                                        oninput="limpiarErrorFormatoTurno(this); filtrarListaTurnos(this)"
+                                        onblur="if(validarFormatoTurno(this) !== null){ actualizarColor(this); recalcularFila(this); guardarTurno(this); if(window.actualizarSubtextoDuracion){window.actualizarSubtextoDuracion(this);} }">
+                                    <div class="schedule-cell-detail">
+                                        <span class="turno-duracion">${formatearDuracionTurno(turnos[dia])}</span>
+                                        ${renderIconoAlertas(descanso, "Descanso insuficiente entre jornadas (mínimo 12h)", "hotel", `${minimo}h`)}
+                                    </div>
+                                </td>`
+                            }).join("")}
+                            <td class="schedule-hours">
+                                <div class="columna-horas">${htmlBloqueHoras(horas, t.jornada)}</div>
+                                ${renderIconoAlertas(alertas.filter(a => a.kind === "horas" && a.semana === index + 1 && String(a.trabajador_id) === String(t.id)), "Horas semanales", "schedule")}
+                            </td>
+                        </tr>`
+                    }).join("") || '<tr><td colspan="9" class="schedule-empty">No hay colaboradores para los filtros seleccionados.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </section>`
+    }).join("")
+    document.querySelectorAll(".turno-input").forEach(actualizarColor)
 }
 
 // =====================================================
@@ -1540,3 +1414,45 @@ async function guardarTurno(input){
 // cargarSistema() se invoca desde inicializarSesion() una vez validado
 // el token contra el backend. Sin sesión los GET protegidos devolverían
 // 401 y dejarían los datos en estado inconsistente.
+
+// Tooltip compartido fuera de la tabla para que el scroll no lo recorte.
+let tooltipPlanificacion = null
+let alertaConTooltip = null
+function ocultarTooltipPlanificacion(){
+    if(tooltipPlanificacion) tooltipPlanificacion.remove()
+    if(alertaConTooltip){
+        alertaConTooltip.title = alertaConTooltip.dataset.motivoAlerta || ""
+        alertaConTooltip.removeAttribute("aria-describedby")
+    }
+    tooltipPlanificacion = null
+    alertaConTooltip = null
+}
+function mostrarTooltipPlanificacion(evento){
+    const boton = evento.target.closest?.(".planning-alert")
+    if(!boton || boton === alertaConTooltip) return
+    ocultarTooltipPlanificacion()
+    const motivo = boton.title
+    if(!motivo) return
+    boton.dataset.motivoAlerta = motivo
+    boton.title = ""
+    alertaConTooltip = boton
+    tooltipPlanificacion = document.createElement("div")
+    tooltipPlanificacion.id = "planning-alert-tooltip"
+    tooltipPlanificacion.className = "planning-tooltip"
+    tooltipPlanificacion.setAttribute("role", "tooltip")
+    tooltipPlanificacion.textContent = motivo
+    document.body.appendChild(tooltipPlanificacion)
+    boton.setAttribute("aria-describedby", tooltipPlanificacion.id)
+    const r = boton.getBoundingClientRect()
+    const t = tooltipPlanificacion.getBoundingClientRect()
+    tooltipPlanificacion.style.left = Math.max(12, Math.min(r.left, innerWidth - t.width - 12)) + "px"
+    tooltipPlanificacion.style.top = Math.max(12, r.top >= t.height + 12 ? r.top - t.height - 8 : Math.min(r.bottom + 8, innerHeight - t.height - 12)) + "px"
+}
+document.addEventListener("mouseover", mostrarTooltipPlanificacion)
+document.addEventListener("focusin", mostrarTooltipPlanificacion)
+document.addEventListener("mouseout", e => {
+    if(alertaConTooltip && !alertaConTooltip.contains(e.relatedTarget)) ocultarTooltipPlanificacion()
+})
+document.addEventListener("focusout", ocultarTooltipPlanificacion)
+document.addEventListener("scroll", ocultarTooltipPlanificacion, true)
+document.addEventListener("keydown", e => { if(e.key === "Escape") ocultarTooltipPlanificacion() })

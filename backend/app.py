@@ -4,13 +4,14 @@ import hmac
 import hashlib
 import secrets
 import unicodedata
+import json
 
 from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from sqlalchemy import inspect, text
@@ -808,6 +809,12 @@ class PlanificacionLoteSchema(BaseModel):
     asignaciones: list[PlanificacionSchema]
 
 
+class PlanificacionAutomaticaSchema(PlanificacionLoteSchema):
+    revision: str = Field(min_length=64, max_length=64)
+    mes: int = Field(ge=1, le=12)
+    anio: int = Field(ge=2000, le=2100)
+
+
 class TrabajadorSchema(BaseModel):
 
     rut: str
@@ -1503,6 +1510,52 @@ def guardar_planificacion_lote(
         "message": "Propuesta aplicada correctamente",
         "asignaciones_guardadas": len(data.asignaciones),
     }
+
+
+def _contexto_automatico(db: Session, empresa_id: int):
+    contexto = {
+        "empresa_id": empresa_id,
+        "trabajadores": obtener_trabajadores(db, empresa_id),
+        "planificacion": obtener_planificacion(db, empresa_id),
+        "cobertura": obtener_configuracion_cobertura(db, empresa_id),
+        "colacion": obtener_configuracion_colacion(db, empresa_id),
+        "turnos": obtener_turnos_frecuentes(db, empresa_id),
+    }
+    revision = hashlib.sha256(json.dumps(contexto, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return {**contexto, "revision": revision}
+
+
+@app.get("/planificacion/contexto-automatico")
+def obtener_contexto_automatico(db: Session = Depends(get_db), empresa_id: int = Depends(get_empresa_id)):
+    # Lectura consistente: todas las tablas pertenecen a la misma revisión.
+    if db.get_bind().dialect.name == "sqlite":
+        db.rollback()
+        db.execute(text("BEGIN"))
+    try:
+        return _contexto_automatico(db, empresa_id)
+    finally:
+        db.rollback()
+
+
+@app.post("/planificacion/automatica")
+def aplicar_planificacion_automatica(data: PlanificacionAutomaticaSchema, db: Session = Depends(get_db), empresa_id: int = Depends(get_empresa_id)):
+    from .automatizacion import validar_propuesta
+    try:
+        # SQLite es monoescritor: tomar el bloqueo antes de comprobar la
+        # revisión evita cambios entre la validación y el guardado del lote.
+        if db.get_bind().dialect.name == "sqlite":
+            db.rollback()
+            db.execute(text("BEGIN IMMEDIATE"))
+        contexto = _contexto_automatico(db, empresa_id)
+        if not hmac.compare_digest(data.revision, contexto["revision"]):
+            raise HTTPException(409, detail="La planificación o su configuración cambió desde que se generó la propuesta. Vuelve a generar antes de aplicar.")
+        if not data.asignaciones:
+            raise HTTPException(422, detail="La propuesta no contiene asignaciones")
+        asignaciones = validar_propuesta(data.asignaciones, contexto, data.mes, data.anio)
+        return guardar_planificacion_lote(PlanificacionLoteSchema(asignaciones=asignaciones), db, empresa_id)
+    except Exception:
+        db.rollback()
+        raise
 
 
 # =========================

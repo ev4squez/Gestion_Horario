@@ -480,6 +480,7 @@
       letter-spacing: -0.04em;
     }
   </style>
+  <link rel="stylesheet" href="css/admin-theme.css" />
 </head>
 
 <body>
@@ -668,8 +669,8 @@
       </header>
 
       <!-- ── CONTENT ──────────────────────── -->
-      <div class="p-4 md:p-6 xl:p-8 flex-1 xl:overflow-hidden">
-        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:h-full">
+      <div class="app-content p-4 md:p-6 xl:p-8 flex-1 xl:overflow-hidden">
+        <div class="app-columns grid grid-cols-1 xl:grid-cols-12 gap-6 xl:h-full">
           <!-- MAIN PANEL -->
           <div id="main-content" class="xl:col-span-9 xl:overflow-auto min-w-0 transition-all duration-300">
             <!-- ===================================== -->
@@ -678,26 +679,21 @@
 
 <div id="vista-planificacion" class="hidden card p-6 md:p-8 min-h-full">
               <!-- PANEL HEADER -->
-              <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
+              <div class="planning-toolbar flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
                 <div>
                   <h3 class="section-title text-2xl">
-                    Planificación General
+                    Planificación
                   </h3>
 
                   <p class="text-slate-400 text-sm font-500 mt-1.5">
-                    Visualización y administración de turnos del equipo.
+                    Turnos y disponibilidad del equipo.
                   </p>
                 </div>
 
-                <div class="flex flex-col gap-3 flex-shrink-0 w-full md:w-auto">
-                  <div class="stat-card xl:flex-none flex items-center gap-3 px-4 py-3 self-start md:self-end"
-                    style="
-                      background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-                      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
-                    ">
-                    <p id="total-trabajadores" class="text-white font-black text-3xl leading-tight">
-                      0
-                    </p>
+                <div class="planning-tools flex flex-col gap-3 flex-shrink-0 w-full md:w-auto">
+                  <div class="planning-count">
+                    <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                    <span id="total-trabajadores">0</span> colaboradores
                   </div>
 
                   <label class="relative block w-full md:w-[22rem]">
@@ -708,6 +704,17 @@
                       placeholder="Buscar colaborador, turno, cargo, CECO o responsable"
                       class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                   </label>
+                </div>
+              </div>
+
+              <div class="planning-actions">
+                <div class="planning-legend" aria-label="Leyenda de turnos">
+                  <span><i data-estado="trabajo"></i>Trabajo</span><span><i data-estado="libre"></i>Libre</span>
+                  <span><i data-estado="vacaciones"></i>Vacaciones</span><span><i data-estado="saliente"></i>Saliente</span>
+                </div>
+                <div class="planning-action-buttons">
+                  <button type="button" class="planning-generate" onclick="generarPlanificacionAutomatica()"><span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>Generar</button>
+                  <button type="button" id="toggle-carga" aria-controls="right-panel" aria-expanded="true" onclick="alternarPanelCarga()"><span class="material-symbols-outlined" aria-hidden="true">side_navigation</span><span class="panel-toggle-label">Ocultar carga</span></button>
                 </div>
               </div>
 
@@ -1333,6 +1340,7 @@
                       </div>
                     </div>
 
+                    <p class="mt-3 text-xs text-slate-500">Durante toda la franja se exige el menor mínimo de apertura y cierre. Los extremos mantienen sus mínimos específicos.</p>
                     <label class="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
                       <input type="checkbox" id="cobertura-activo" checked
                         class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
@@ -1529,25 +1537,6 @@
           <!-- RIGHT PANEL -->
           <div id="right-panel"
             class="xl:col-span-3 min-w-0 transition-all duration-300 grid grid-cols-1 sm:grid-cols-2 xl:flex xl:flex-col gap-5 content-start xl:h-full xl:overflow-hidden">
-            <!-- HORAS STAT -->
-            <button type="button" onclick="generarPlanificacionAutomatica()"
-              class="stat-card xl:flex-none flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:scale-[1.02] transition-all duration-200"
-              style="
-                background: linear-gradient(135deg, #3b6ef8 0%, #6490fb 100%);
-                box-shadow: 0 6px 20px rgba(59, 110, 248, 0.35);
-              ">
-              <span class="material-symbols-outlined text-white/80 shrink-0" style="font-size: 28px">smart_toy</span>
-              <div class="min-w-0">
-                <p class="text-blue-100/90 text-[10px] font-bold uppercase tracking-widest leading-none mb-1">
-                  Generar
-                </p>
-                <p id="total-horas" class="text-white font-black text-sm leading-tight truncate">
-                  Planificación automática
-                </p>
-              </div>
-            </button>
-
-
             <!-- ALERTAS CARD -->
             <div id="card-alertas" class="card overflow-hidden xl:flex xl:flex-col xl:flex-1 xl:min-h-0">
               <!-- HEADER -->
@@ -1584,7 +1573,7 @@
                 <div>
                   <h2 class="section-title text-lg">Carga mensual</h2>
                   <p class="text-slate-400 text-xs font-500 mt-0.5">
-                    Sobrecarga, nocturnos, domingos y libres
+                    Balance del equipo
                   </p>
                 </div>
               </div>
@@ -1666,7 +1655,11 @@
   <script src="js/resumen.js"></script>
   <script src="js/cobertura.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/carga-modal.js"></script>
+  <script src="js/motor_diagnostico.js"></script>
+  <script src="js/motor_jornada.js"></script>
   <script src="js/motor_asignacion.js"></script>
+  <script src="js/motor_modal.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>

@@ -76,22 +76,23 @@ function ocultarTodasLasVistas() {
 // Usamos `style.display = ""` para limpiar el inline y dejar que el CSS de
 // clase (`xl:flex`, `grid`) determine cómo se ve.
 function mostrarPanelDerecho(){
-
+    const plegado = !!window.panelCargaPlegado
     const rightPanel = document.getElementById("right-panel")
     const mainContent = document.getElementById("main-content")
-
     if(rightPanel){
-        // El panel tiene class="hidden ..." además del style inline. Hay
-        // que quitar la clase `hidden` y limpiar el style para que el CSS
-        // responsive de Tailwind (xl:flex) defina la visualización.
         rightPanel.classList.remove("hidden")
-        rightPanel.style.display = ""
+        rightPanel.style.display = plegado ? "none" : ""
     }
     if(mainContent){
-        mainContent.classList.remove("xl:col-span-12")
-        mainContent.classList.add("xl:col-span-9")
+        mainContent.classList.toggle("xl:col-span-12", plegado)
+        mainContent.classList.toggle("xl:col-span-9", !plegado)
+        mainContent.closest(".app-columns")?.classList.toggle("workload-collapsed", plegado)
     }
-
+    const boton = document.getElementById("toggle-carga")
+    if(boton){
+        boton.setAttribute("aria-expanded", String(!plegado))
+        boton.querySelector(".panel-toggle-label").textContent = plegado ? "Mostrar carga" : "Ocultar carga"
+    }
 }
 
 window.busquedaTrabajadores = window.busquedaTrabajadores || ""
@@ -128,6 +129,8 @@ function mostrarVistaPlanificacion() {
     // El panel derecho (stats + alertas + carga mensual) solo se muestra
     // dentro de la vista planificación.
     mostrarPanelDerecho()
+
+    actualizarVistaPlanificacion()
 
 }
 
@@ -335,6 +338,12 @@ function cargarFiltrosTrabajadores() {
                 `
             })
 
+        if(actual && !Array.from(selectCargo.options).some(o => o.value === actual)){
+            const opcion = document.createElement("option")
+            opcion.value = actual
+            opcion.textContent = actual
+            selectCargo.appendChild(opcion)
+        }
         selectCargo.value = actual
 
     }
@@ -360,6 +369,12 @@ function cargarFiltrosTrabajadores() {
                 `
             })
 
+        if(actual && !Array.from(selectResponsable.options).some(o => o.value === actual)){
+            const opcion = document.createElement("option")
+            opcion.value = actual
+            opcion.textContent = actual
+            selectResponsable.appendChild(opcion)
+        }
         selectResponsable.value = actual
 
     }
@@ -387,6 +402,12 @@ function cargarFiltrosTrabajadores() {
 
             })
 
+        if(actual && !Array.from(selectArea.options).some(o => o.value === actual)){
+            const opcion = document.createElement("option")
+            opcion.value = actual
+            opcion.textContent = actual
+            selectArea.appendChild(opcion)
+        }
         selectArea.value = actual
 
     }
@@ -414,6 +435,12 @@ function cargarFiltrosTrabajadores() {
 
             })
 
+        if(actual && !Array.from(selectCeco.options).some(o => o.value === actual)){
+            const opcion = document.createElement("option")
+            opcion.value = actual
+            opcion.textContent = actual
+            selectCeco.appendChild(opcion)
+        }
         selectCeco.value = actual
 
     }
@@ -455,7 +482,7 @@ function limpiarFiltrosTrabajadores() {
 }
 
 function renderizarTrabajadoresCRUD(
-    lista = trabajadoresGlobal
+    lista = filtrarTrabajadoresCRUD(trabajadoresGlobal)
 ) {
 
     const tbody =

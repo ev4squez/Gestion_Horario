@@ -144,102 +144,61 @@ function trabajadorCumpleRegla(trabajador, regla){
 }
 
 function intervalosTrabajadosParaRegla(regla, fechaTexto){
-
-    return planificacionGlobal
-        .map(p => {
-
-            const trabajador =
-                trabajadoresGlobal.find(t => t.id === p.trabajador_id)
-
-            if(!trabajador || !trabajadorCumpleRegla(trabajador, regla)){
-                return null
-            }
-
-            if(!String(p.fecha || "").startsWith(fechaTexto)){
-                return null
-            }
-
-            const intervalo =
-                intervaloDesdeTurno(fechaTexto, p.turno)
-
-            if(!intervalo){ return null }
-
-            return {
-                ...intervalo,
-                trabajador
-            }
-
-        })
-        .filter(Boolean)
-
+    const requerido = intervaloDesdeHora(new Date(`${fechaTexto}T00:00:00`),regla.hora_inicio,regla.hora_fin)
+    if(!requerido) return []
+    return planificacionGlobal.map(p => {
+        const trabajador = trabajadoresGlobal.find(t => String(t.id) === String(p.trabajador_id))
+        if(!trabajador || trabajador.activo === false || !trabajadorCumpleRegla(trabajador,regla)) return null
+        const intervalo = intervaloDesdeTurno(String(p.fecha).slice(0,10),p.turno)
+        if(!intervalo || intervalo.inicio >= requerido.fin || intervalo.fin <= requerido.inicio) return null
+        return {...intervalo,trabajador}
+    }).filter(Boolean)
 }
 
-// Dotación (nº de intervalos) que cubre un instante t. Inicio-inclusive y
-// fin-exclusive: un turno cubre t si inicio <= t < fin.
 function dotacionEnInstante(intervalos, t){
-
-    return intervalos.filter(i =>
-        i.inicio.getTime() <= t && i.fin.getTime() > t
-    ).length
-
+    const presentes = intervalos.filter(i => i.inicio.getTime() <= t && i.fin.getTime() > t)
+    return new Set(presentes.map(i => i.trabajador ? String(i.trabajador.id) : i)).size
 }
 
-// Interpretación "solo dos puntos": el mínimo se exige exactamente en la
-// apertura (requerido.inicio) y en el cierre (último instante de la franja),
-// no en el tramo intermedio. Devuelve hasta dos brechas, una por punto.
-// Cada brecha lleva:
-//   - punto: "inicio" | "fin" (cuál extremo falla)
-//   - cobertura: instante que un turno debe cubrir para tapar la brecha
-//   - inicio/fin: franja completa, usada como turno a medida de respaldo
+// Cobertura continua: el menor mínimo de los extremos se exige en toda
+// la franja; los mínimos específicos de apertura y cierre se conservan.
 function calcularBrechasIntervalo(requerido, intervalos, minimoInicio, minimoFin){
-
+    const inicio = requerido.inicio.getTime(), fin = requerido.fin.getTime()
+    const minimo = Math.min(Number(minimoInicio), Number(minimoFin))
+    const limites = [...new Set([inicio, fin, ...intervalos.flatMap(i =>
+        [i.inicio.getTime(), i.fin.getTime()].filter(t => t > inicio && t < fin)
+    )])].sort((a,b) => a-b)
     const brechas = []
-
-    const tInicio = requerido.inicio.getTime()
-    // Instante representativo del cierre: el último minuto de la franja.
-    const tFin = requerido.fin.getTime() - 60000
-
-    const dotacionInicio =
-        dotacionEnInstante(intervalos, tInicio)
-
-    if(dotacionInicio < minimoInicio){
-        brechas.push({
-            punto: "inicio",
-            inicio: new Date(requerido.inicio),
-            fin: new Date(requerido.fin),
-            cobertura: new Date(tInicio),
-            dotacion: dotacionInicio,
-            minimo: minimoInicio,
-            faltan: minimoInicio - dotacionInicio
-        })
+    for(let i=0;i<limites.length-1;i++){
+        const desde=limites[i], hasta=limites[i+1]
+        const dotacion=dotacionEnInstante(intervalos,desde)
+        if(dotacion >= minimo) continue
+        const ultima=brechas[brechas.length-1]
+        if(ultima && ultima.fin.getTime()===desde && ultima.dotacion===dotacion){
+            ultima.fin=new Date(hasta)
+        }else{
+            brechas.push({punto:"tramo",inicio:new Date(desde),fin:new Date(hasta),
+                cobertura:new Date(desde),dotacion,minimo,faltan:minimo-dotacion})
+        }
     }
-
-    const dotacionFin =
-        dotacionEnInstante(intervalos, tFin)
-
-    if(dotacionFin < minimoFin){
-        brechas.push({
-            punto: "fin",
-            inicio: new Date(requerido.inicio),
-            fin: new Date(requerido.fin),
-            cobertura: new Date(tFin),
-            dotacion: dotacionFin,
-            minimo: minimoFin,
-            faltan: minimoFin - dotacionFin
-        })
+    for(const [punto,instante,exigido] of [["inicio",inicio,Number(minimoInicio)],["fin",fin-60000,Number(minimoFin)]]){
+        const dotacion=dotacionEnInstante(intervalos,instante)
+        if(exigido > minimo && dotacion < exigido){
+            brechas.push({punto,inicio:new Date(inicio),fin:new Date(fin),
+                cobertura:new Date(instante),dotacion,minimo:exigido,faltan:exigido-dotacion})
+        }
     }
-
-    return brechas
-
+    return brechas.sort((a,b)=>a.cobertura-b.cobertura)
 }
 
-// Etiqueta legible del punto que falla, p. ej. "Apertura 09:00" / "Cierre 05:00".
 function etiquetaPuntoBrecha(b){
-
+    if(b.punto === "tramo"){
+        const siguiente = formatearFechaISO(b.fin) !== formatearFechaISO(b.inicio)
+        return `${formatearHoraDesdeFecha(b.inicio)}–${formatearHoraDesdeFecha(b.fin)}${siguiente ? " (día siguiente)" : ""}`
+    }
     return b.punto === "fin"
         ? `Cierre ${formatearHoraDesdeFecha(b.fin)}`
         : `Apertura ${formatearHoraDesdeFecha(b.inicio)}`
-
 }
 
 function calcularCobertura(){
@@ -325,6 +284,7 @@ function calcularAlertasCobertura(trabajadores){
                 return [{
                     tipo: "danger",
                     kind: "cobertura",
+                    fecha: r.fecha,
                     titulo: `${r.fecha} · ${r.regla.tipo.toUpperCase()} ${r.regla.valor}`,
                     mensaje: r.error,
                     detalle: `Mínimo ${r.regla.minimo_inicio ?? r.regla.minimo_personas} → ${r.regla.minimo_fin ?? r.regla.minimo_personas}`,
@@ -334,6 +294,7 @@ function calcularAlertasCobertura(trabajadores){
             return r.brechas.map(b => ({
                 tipo: b.faltan > 0 ? "danger" : "warning",
                 kind: "cobertura",
+                    fecha: r.fecha,
                 titulo: `${r.fecha} · ${r.regla.tipo.toUpperCase()} ${r.regla.valor}`,
                 mensaje: `Brecha ${etiquetaPuntoBrecha(b)}`,
                 detalle: `Dotación ${b.dotacion}/${b.minimo} · faltan ${b.faltan}`,

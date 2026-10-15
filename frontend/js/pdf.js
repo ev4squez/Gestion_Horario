@@ -1,392 +1,57 @@
-// =====================================================
-// EXPORTAR PDF
-// =====================================================
-// Las funciones auxiliares (obtenerNombreMes, obtenerIconoPDF) viven en
-// pdf/auxiliares.js y se cargan antes que este archivo via <script>.
-
+// Exporta el mismo equipo y filtros visibles en Planificación.
 function exportarPDF(){
-
-    // Wrap defensivo: cualquier excepcion de runtime (p. ej. una global
-    // faltante, un JSON mal formado, un pdfMake que falla) se loguea Y
-    // se muestra en pantalla, porque el usuario suele no abrir la consola
-    // y el sintoma de "le hice click y no pasa nada" esconde el error
-    // real.
     try{
-
-    // =====================================
-    // VALIDACION
-    // =====================================
-
-    if(typeof trabajadoresGlobal === 'undefined'){
-
-        console.error(
-            "trabajadoresGlobal no definido"
-        )
-
-        return
-
-    }
-
-    // =====================================
-    // FILTRO CARGO
-    // =====================================
-
-    const trabajadores =
-        filtrarPorCargos(trabajadoresGlobal)
-
-    // =====================================
-    // CECO
-    // =====================================
-
-    const cecos = [
-
-        ...new Set(
-
-            trabajadores.map(
-                t => t.ceco
-            )
-
-        )
-
-    ]
-
-    .filter(Boolean)
-
-    .join(", ")
-
-    // =====================================
-    // SEMANAS
-    // =====================================
-
-    const semanas =
-        generarSemanas(
-            mesActual,
-            anioActual
-        )
-
-    let contenido = []
-
-    // =====================================
-    // CABECERA
-    // =====================================
-
-    contenido.push(
-            construirCabecera({
-                cecos,
-                mesActual,
-                anioActual,
+        const trabajadores = trabajadoresPlanificacionVisibles().filter(t => t.activo !== false)
+        if(!trabajadores.length){ alert('No hay colaboradores para exportar con estos filtros.'); return }
+        const cecos = [...new Set(trabajadores.map(t=>t.ceco).filter(Boolean))].join(', ')
+        const semanas = generarSemanas(mesActual, anioActual)
+        const generado = new Date().toLocaleString('es-CL')
+        const contenido = [
+            construirCabecera({cecos,mesActual,anioActual}),
+            construirStats({trabajadores,semanas,cecos}),
+            construirLeyenda(),
+            ...construirTabla({trabajadores,semanas,mesActual})
+        ]
+        const alertas = typeof calcularTodasAlertas === 'function' ? calcularTodasAlertas(trabajadores) : []
+        if(alertas.length){
+            const body = [[
+                {text:'TIPO',bold:true},{text:'REFERENCIA',bold:true},{text:'MOTIVO',bold:true}
+            ]]
+            alertas.forEach(a => {
+                const color = a.tipo === 'danger' ? '#b34545' : a.tipo === 'info' ? '#365fc4' : '#996515'
+                const tipo = a.kind === 'horas' ? 'Horas semanales' : a.kind === 'cobertura' ? 'Cobertura' : 'Descanso'
+                const referencia = a.kind === 'cobertura' ? a.titulo : a.trabajador
+                const motivo = a.kind === 'horas'
+                    ? `Semana ${a.semana} · ${a.horas}h / ${a.jornada}h · ${a.diferencia > 0 ? '+' : ''}${a.diferencia}h`
+                    : a.kind === 'cobertura' ? `${a.mensaje} · ${a.detalle}`
+                    : `${a.fecha1} al ${a.fecha2} · Descanso ${a.descanso.toFixed(1)}h (mínimo 12h)`
+                body.push([{text:tipo,color},{text:referencia || '—'},{text:motivo}])
             })
-        )
-
-    // =====================================
-    // RESUMEN Y LEYENDA
-    // =====================================
-
-    contenido.push(
-        construirStats({
-            trabajadores,
-            semanas,
-            cecos,
-        })
-    )
-
-    contenido.push(construirLeyenda())
-
-    // =====================================
-    // SEMANAS
-    // =====================================
-
-    // El bucle de semanas vive ahora en pdf/tabla.js (construirTabla).
-    // Devuelve un array de items que se concatenan al `contenido`.
-    contenido.push(...construirTabla({trabajadores, semanas, mesActual}))
-
-    // =====================================
-    // ALERTAS
-    // =====================================
-    // Guard defensivo: si por algun motivo `calcularTodasAlertas` no esta
-    // expuesta globalmente (por ejemplo, porque `resumen.js` fallo al
-    // cargar o se cargo despues de pdf.js en algun flujo), seguimos sin
-    // alertas en vez de reventar toda la generacion del PDF.
-    const alertas =
-        typeof calcularTodasAlertas === "function"
-            ? calcularTodasAlertas(trabajadores)
-            : []
-
-    if(
-        alertas
-        &&
-        alertas.length > 0
-    ){
-
-        contenido.push({
-
-            pageBreak:'before',
-
-            columns:[
-
-                {
-
-                    width:22,
-
-                    svg:
-                        obtenerIconoPDF(
-                            'alerta',
-                            '#dc2626'
-                        ),
-
-                    margin:[0,0,6,0]
-
-                },
-
-                {
-
-                    text:
-                        `ALERTAS DE PLANIFICACIÓN (${alertas.length})`,
-
-                    fontSize:12,
-
-                    bold:true,
-
-                    color:'#991b1b',
-
-                    margin:[0,2,0,0]
-
-                }
-
-            ],
-
-            margin:[0,10,0,8]
-
-        })
-
-        alertas.forEach(a => {
-
-            let texto
-
-            if(a.kind === "horas"){
-
-                const diferencia =
-                    Math.abs(a.diferencia).toFixed(1)
-
-                texto =
-                    `${a.trabajador} | Semana ${a.semana} | ` +
-                    `${a.horas}h de ${a.jornada}h | ` +
-                    (
-                        a.diferencia > 0
-                            ? `Horas extra: +${diferencia}h`
-                            : `Horas faltantes: ${diferencia}h`
-                    )
-
-            }else if(a.kind === "cobertura"){
-
-                texto =
-                    `${a.titulo} | ${a.mensaje} | ${a.detalle}`
-
-            }else{
-
-                texto =
-                    `${a.trabajador} | ${a.fecha1} → ${a.fecha2} | ` +
-                    `Descanso: ${a.descanso.toFixed(1)}h`
-
-            }
-
-            const colorAlerta =
-                a.tipo === 'danger'
-                    ? '#dc2626'
-                    : a.tipo === 'info'
-                        ? '#2563eb'
-                        : '#d97706'
-
-            const fondoAlerta =
-                a.tipo === 'danger'
-                    ? '#fef2f2'
-                    : a.tipo === 'info'
-                        ? '#eff6ff'
-                        : '#fffbeb'
-
-            const tipoIcono =
-                a.kind === 'cobertura'
-                    ? 'cobertura'
-                    : a.kind === 'horas'
-                        ? 'reloj'
-                        : 'alerta'
-
+            contenido.push({pageBreak:'before',stack:[
+                {text:'Alertas de planificación',fontSize:17,bold:true,color:'#253247',margin:[0,0,0,5]},
+                {text:`${alertas.length} observaciones · ${obtenerNombreMes(mesActual)} ${anioActual}`,fontSize:9,color:'#626f82',margin:[0,0,0,12]}
+            ]})
             contenido.push({
-
-                unbreakable:true,
-
-                table:{
-
-                    widths:[22, '*'],
-
-                    body:[[
-
-                        {
-
-                            svg:
-                                obtenerIconoPDF(
-                                    tipoIcono,
-                                    colorAlerta
-                                ),
-
-                            margin:[0,1,6,0]
-
-                        },
-
-                        {
-
-                            text:texto,
-
-                            color:'#334155',
-
-                            fontSize:8,
-
-                            margin:[0,2,0,2]
-
-                        }
-
-                    ]]
-
-                },
-
-                layout:{
-                    hLineWidth:() => 0,
-                    vLineWidth:() => 0,
-                    fillColor:() => fondoAlerta,
-                    paddingLeft:() => 8,
-                    paddingRight:() => 8,
-                    paddingTop:() => 5,
-                    paddingBottom:() => 5
-                },
-
-                margin:[0,0,0,4]
-
+                table:{headerRows:1,dontBreakRows:true,widths:[90,180,'*'],body},
+                layout:{hLineWidth:()=>.5,vLineWidth:()=>0,hLineColor:()=> '#e5eaf0',
+                    paddingTop:()=>7,paddingBottom:()=>7,paddingLeft:()=>8,paddingRight:()=>8,
+                    fillColor:row=>row===0 ? '#ecf2ff' : row%2===0 ? '#f6f9fc' : '#fff'},
+                fontSize:8,color:'#253247'
             })
-
-        })
-
-    }
-
-    // =====================================
-    // FOOTER
-    // =====================================
-
-    const documento = {
-
-        pageOrientation:'landscape',
-
-        pageMargins:[25,25,25,30],
-
-        footer:function(currentPage,pageCount){
-
-            return {
-
-                columns:[
-
-                    {
-
-                        text:
-                            `Generado: ${
-                                new Date().toLocaleString()
-                            }`,
-
-                        alignment:'left',
-
-                        margin:[25,0]
-
-                    },
-
-                    {
-
-                        text:
-                            `Página ${currentPage} de ${pageCount}`,
-
-                        alignment:'right',
-
-                        margin:[0,0,25,0]
-
-                    }
-
-                ],
-
-                fontSize:8,
-
-                color:'#64748b'
-
-            }
-
-        },
-
-        content:contenido,
-
-        styles:{
-
-            tableHeader:{
-
-                bold:true,
-
-                fontSize:9,
-
-                color:'white',
-
-                alignment:'center',
-
-                margin:[0,3,0,3]
-
-            }
-
-        },
-
-        defaultStyle:{
-
-            fontSize:10
-
         }
-
-    }
-
-    // =====================================
-    // EXPORTAR
-    // =====================================
-
-    pdfMake.createPdf(
-        documento
-    ).download(
-
-        `Planificacion_${
-            obtenerNombreMes(
-                mesActual
-            )
-        }_${anioActual}.pdf`
-
-    )
-
+        const documento = {
+            pageSize:'A4',pageOrientation:'landscape',pageMargins:[28,32,28,34],
+            info:{title:`Planificación ${obtenerNombreMes(mesActual)} ${anioActual}`,subject:'Planificación de turnos'},
+            header:page=>page===1 ? null : {text:`PLANIFICACIÓN · ${obtenerNombreMes(mesActual)} ${anioActual}`,fontSize:8,color:'#626f82',margin:[28,14,28,0]},
+            footer:(page,total)=>({columns:[
+                {text:`Generado: ${generado}`,alignment:'left'},
+                {text:`Página ${page} de ${total}`,alignment:'right'}
+            ],margin:[28,12,28,0],fontSize:8,color:'#626f82'}),
+            content:contenido,defaultStyle:{font:'Roboto',fontSize:9,color:'#253247'}
+        }
+        pdfMake.createPdf(documento).download(`Planificacion_${obtenerNombreMes(mesActual)}_${anioActual}.pdf`)
     }catch(err){
-
-        // Loguear a la consola con stack completo para debugging.
-        console.error("[exportarPDF] fallo:", err && err.message, err && err.stack)
-
-        // Y ademas mostrar un alert con el mensaje para que el usuario
-        // sepa que algo fallo aunque no abra la consola del navegador.
-        // Mantenemos el mensaje corto para que sea legible.
-        let msg = "No se pudo generar el PDF."
-
-        if(err && err.message){
-
-            msg += "\n\nDetalle: " + err.message
-
-        }
-
-        try{
-
-            alert(msg)
-
-        }catch(_){ // alert puede no estar disponible en algunos contextos
-
-            // Silenciar si alert no esta disponible.
-
-        }
-
+        console.error('Error al exportar PDF:',err)
+        alert('No se pudo generar el PDF: ' + (err.message || err))
     }
-
 }

@@ -480,7 +480,7 @@ async function guardarTrabajador(){
 
     cargarFiltrosTrabajadores()
 
-    renderizarTrabajadoresCRUD()
+    aplicarFiltrosTrabajadores()
 
     cargarCargos()
 
@@ -527,7 +527,7 @@ async function eliminarTrabajadorCRUD(id){
 
     cargarFiltrosTrabajadores()
 
-    renderizarTrabajadoresCRUD()
+    aplicarFiltrosTrabajadores()
 
     cargarCargos()
 

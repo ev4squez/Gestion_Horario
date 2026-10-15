@@ -422,6 +422,19 @@ async function guardarPlanificacionLote(asignaciones) {
 }
 
 
+async function obtenerContextoAutomatico(){
+    const response = await fetch('planificacion/contexto-automatico', {headers:authHeaders()})
+    if(!response.ok) throw new Error(await leerMensajeRespuestaError(response, 'No se pudo cargar la planificación actual.'))
+    return response.json()
+}
+
+async function guardarPlanificacionAutomatica(propuesta, asignaciones){
+    return fetch('planificacion/automatica', {
+        method:'POST',headers:authHeaders({'Content-Type':'application/json'}),
+        body:JSON.stringify({asignaciones,revision:propuesta.revision,mes:propuesta.mes+1,anio:propuesta.anio})
+    })
+}
+
 // =====================================================
 // CONFIGURACIÓN COBERTURA
 // =====================================================

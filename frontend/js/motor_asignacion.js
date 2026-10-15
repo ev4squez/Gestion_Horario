@@ -9,17 +9,18 @@ const MOTOR_MAX_DIAS_CONSECUTIVOS = 6
 const MOTOR_MAX_HORAS_LEGALES_SEMANA = 42
 
 let propuestaPlanificacionAutomatica = null
+let motorCargandoContexto = false
 
-function motorFechasDelMes(){
+function motorFechasDelMes(mes = mesActual, anio = anioActual){
 
     const fechas = []
     const ultimoDia =
-        new Date(anioActual, mesActual + 1, 0).getDate()
+        new Date(anio, mes + 1, 0).getDate()
 
     for(let dia=1; dia<=ultimoDia; dia++){
         fechas.push(
             formatearFechaISO(
-                new Date(anioActual, mesActual, dia)
+                new Date(anio, mes, dia)
             )
         )
     }
@@ -57,7 +58,7 @@ function motorClaveAsignacion(trabajadorId, fecha){
 function motorInicioSemana(fechaTexto){
 
     const fecha =
-        new Date(`${fechaTexto}T00:00:00`)
+        new Date(`${String(fechaTexto).slice(0, 10)}T00:00:00`)
 
     const dia =
         fecha.getDay() === 0
@@ -193,7 +194,9 @@ function motorTurnosParaBrecha(fechaTexto, brecha, regla){
             brecha.fin
         )
 
-    if(!turnos.includes(turnoMedida)){
+    const intervaloMedida = intervaloDesdeTurno(fechaTexto,turnoMedida)
+    const puntoMedida = brecha.cobertura || brecha.inicio
+    if(intervaloMedida && intervaloMedida.inicio <= puntoMedida && intervaloMedida.fin > puntoMedida && !turnos.includes(turnoMedida)){
         turnos.unshift(turnoMedida)
     }
 
@@ -205,7 +208,7 @@ function motorAsignacionesTrabajador(mapa, trabajadorId){
 
     return [...mapa.values()]
         .filter(registro =>
-            registro.trabajador_id === trabajadorId &&
+            String(registro.trabajador_id) === String(trabajadorId) &&
             motorEsTurnoTrabajado(registro.turno)
         )
 
@@ -228,7 +231,7 @@ function motorHorasSemana(
         )
         .filter(registro =>
             motorInicioSemana(registro.fecha) === semana &&
-            registro.fecha !== fechaTexto
+            (turnoNuevo === null || registro.fecha !== fechaTexto)
         )
         .map(registro => registro.turno)
 
@@ -599,49 +602,15 @@ function motorTurnosCompatiblesConReglas(trabajador, fechaTexto){
 
 }
 
-// ¿Cuántos trabajadores (en `mapa`, que combina manual + propuesta) cubren
-// el instante `hora` del día `fechaTexto`? Se usa para evitar sobre-cumplir
-// minimo_inicio / minimo_fin al asignar turnos automáticos.
-function motorContarCoberturaSlot(mapa, fechaTexto, hora){
-
-    let count = 0
-
-    for(const registro of mapa.values()){
-        if(String(registro.fecha).slice(0, 10) !== fechaTexto){ continue }
-        if(!motorTurnoCubreApertura(registro.turno, fechaTexto, hora)){ continue }
-        count++
-    }
-
-    return count
-
-}
-
-// ¿El candidato `turno` cubre al menos un slot de las reglas que aún está
-// bajo el mínimo? Si no, no aporta a la cobertura y se descarta (modo
-// estricto). Considera tanto la apertura (hora_inicio / minimo_inicio) como
-// el cierre (hora_fin / minimo_fin) de cada regla aplicable.
+// Usar las mismas brechas por regla que la fase principal: no contar
+// personal de otro CECO/cargo/área ni evaluar el cierre en el día equivocado.
 function motorTurnoCubreSlotSubcubierto(mapa, turno, fechaTexto, reglas){
-
-    if(!reglas || reglas.length === 0){ return false }
-
-    for(const regla of reglas){
-
-        if(motorTurnoCubreApertura(turno, fechaTexto, regla.hora_inicio)){
-            const count =
-                motorContarCoberturaSlot(mapa, fechaTexto, regla.hora_inicio)
-            if(count < regla.minimo_inicio){ return true }
-        }
-
-        if(motorTurnoCubreApertura(turno, fechaTexto, regla.hora_fin)){
-            const count =
-                motorContarCoberturaSlot(mapa, fechaTexto, regla.hora_fin)
-            if(count < regla.minimo_fin){ return true }
-        }
-
-    }
-
-    return false
-
+    const intervalo = intervaloDesdeTurno(fechaTexto, turno)
+    if(!intervalo || !reglas?.length) return false
+    return reglas.some(regla => {
+        const brechas = motorBrechasRegla(mapa, trabajadoresGlobal, regla, fechaTexto)
+        return brechas?.some(b => intervalo.inicio <= b.cobertura && intervalo.fin > b.cobertura)
+    })
 }
 
 // Elige el mejor turno disponible para acercar al trabajador a su jornada
@@ -711,6 +680,12 @@ function motorCandidatoValido(
             clave
         )
 
+    // Estados intencionales nunca son candidatos, ni en cobertura ni al
+    // completar jornadas. Un turno real puede ajustarse con aprobación.
+    if(existente && !motorEsNoAsignado(existente.turno) && !motorEsTurnoTrabajado(existente.turno)){
+        return false
+    }
+
     mapa.delete(clave)
 
     const valido =
@@ -773,8 +748,9 @@ function motorResumenSuficiencia(
     const topupAsignaciones =
         topup.topup_asignaciones || 0
 
+    const coberturaCompleta = reglasEvaluadas > 0 && conflictos.length === 0
     const mensajePersonal =
-        conflictosCobertura.length === 0
+        reglasEvaluadas === 0 ? "No hay reglas de cobertura evaluadas para este equipo." : coberturaCompleta
             ? "El personal disponible permite cumplir la cobertura configurada."
             : "Se requiere más personal disponible o ajustar turnos para cumplir toda la cobertura."
 
@@ -784,21 +760,18 @@ function motorResumenSuficiencia(
             Math.round((semanasAlcanzadas / semanasTotales) * 100)
         mensajeJornada =
             semanasAlcanzadas === semanasTotales
-                ? `Top-up completado: ${semanasAlcanzadas}/${semanasTotales} ` +
-                  `pares (trabajador × semana) alcanzaron su jornada.`
-                : `Top-up parcial: ${semanasAlcanzadas}/${semanasTotales} ` +
-                  `pares (${porcentaje}%) alcanzaron su jornada. El resto ` +
-                  `no tiene días libres donde encajar un turno válido.`
+                ? `${semanasAlcanzadas}/${semanasTotales} semanas de colaboradores alcanzaron entre el 95% y el 100% de su jornada.`
+                : `${semanasAlcanzadas}/${semanasTotales} semanas de colaboradores (${porcentaje}%) alcanzaron entre el 95% y el 100% de su jornada. Revisa las semanas restantes.`
     }
 
     return {
+        personal: topup.personal || null,
         fechas_evaluadas: fechasEvaluadas,
         reglas_evaluadas: reglasEvaluadas,
         reglas_cubiertas:
             Math.max(0, reglasEvaluadas - reglasSinCubrir.size),
         reglas_sin_cubrir: reglasSinCubrir.size,
-        personal_suficiente:
-            conflictosCobertura.length === 0,
+        personal_suficiente: coberturaCompleta,
         semanas_alcanzadas: semanasAlcanzadas,
         semanas_totales: semanasTotales,
         topup_asignaciones: topupAsignaciones,
@@ -832,30 +805,19 @@ function motorBrechasRegla(
 
     if(!requerido){ return null }
 
-    const intervalos =
-        trabajadores.map(trabajador => {
-
-            if(!trabajadorCumpleRegla(trabajador, regla)){
-                return null
-            }
-
-            const registro =
-                mapa.get(
-                    motorClaveAsignacion(
-                        trabajador.id,
-                        fechaTexto
-                    )
-                )
-
-            if(!registro){ return null }
-
-            return intervaloDesdeTurno(
-                    fechaTexto,
-                    registro.turno
-                )
-
-        })
-        .filter(Boolean)
+    const fechas = [-1,0,1].map(desplazamiento => {
+        const fecha = new Date(`${fechaTexto}T00:00:00`)
+        fecha.setDate(fecha.getDate()+desplazamiento)
+        return formatearFechaISO(fecha)
+    })
+    const intervalos = trabajadores
+        .filter(t => t.activo !== false && trabajadorCumpleRegla(t,regla))
+        .flatMap(t => fechas.map(fecha => {
+            const registro = mapa.get(motorClaveAsignacion(t.id,fecha))
+            const intervalo = registro ? intervaloDesdeTurno(fecha,registro.turno) : null
+            return intervalo ? {...intervalo,trabajador:t} : null
+        }))
+        .filter(i => i && i.inicio < requerido.fin && i.fin > requerido.inicio)
 
     return calcularBrechasIntervalo(
         requerido,
@@ -898,12 +860,16 @@ function motorSeleccionarCandidato(
     mapa,
     candidatos,
     turnosRotativos,
-    fechaTexto
+    fechaTexto,
+    brecha = null
 ){
 
     const opciones = []
 
     candidatos.forEach(trabajador => {
+
+        const guardado = mapa.get(motorClaveAsignacion(trabajador.id,fechaTexto))
+        if(guardado?.origen === "existente" && motorEsTurnoTrabajado(guardado.turno)) return
 
         // Si el trabajador es fijo, el turno a evaluar es el del día
         // concreto (turno_fijo por día de la semana). El parámetro
@@ -911,9 +877,8 @@ function motorSeleccionarCandidato(
         const turnoFijo =
             motorTurnoFijoDelDia(trabajador, fechaTexto)
 
-        const esFijo =
-            motorEsFijo(trabajador) &&
-            turnoFijo !== null
+        const esFijo = motorEsFijo(trabajador)
+        if(esFijo && !turnoFijo) return
 
         const turnosFrecuentesCeco =
             motorTurnosDisponibles(trabajador.ceco)
@@ -921,7 +886,8 @@ function motorSeleccionarCandidato(
         const turnos = esFijo
             ? [turnoFijo]
             : turnosRotativos.filter(turno =>
-                turnosFrecuentesCeco.includes(turno)
+                turnosFrecuentesCeco.includes(turno) ||
+                (brecha && turno === motorTurnoDesdeIntervalo(brecha.inicio,brecha.fin))
             )
 
         turnos.forEach(turno => {
@@ -1032,6 +998,7 @@ function construirPropuestaPlanificacionAutomatica(){
 
     const mapa =
         motorMapaPlanificacionActual()
+    const mapaInicial = new Map(mapa)
 
     const asignaciones = []
     const conflictos = []
@@ -1155,7 +1122,8 @@ function construirPropuestaPlanificacionAutomatica(){
                             mapa,
                             candidatosRegla,
                             turnos,
-                            fechaTexto
+                            fechaTexto,
+                            brecha
                         )
 
                     if(!seleccion){
@@ -1245,200 +1213,26 @@ function construirPropuestaPlanificacionAutomatica(){
 
     })
 
-    // =====================================================
-    // TOP-UP: completar la jornada respetando cobertura estricta
-    // =====================================================
-    // Tras cubrir las brechas de cobertura, recorremos los trabajadores y
-    // agregamos turnos en los días aún vacíos hasta acercar a cada uno a su
-    // `jornada` semanal. Restricciones:
-    //   - Solo asigna en días con reglas aplicables al CECO/cargo del
-    //     trabajador (no se rellenan días sin regla).
-    //   - El turno debe cubrir al menos un slot (apertura o cierre) que aún
-    //     esté bajo minimo_inicio / minimo_fin: no sobrecubre.
-    //   - Para fijos con turnos_fijos: usa el turno del día concreto (puede
-    //     ser distinto por día). Si el día no tiene turno fijo definido,
-    //     no se asigna nada.
-    //   - Para rotativos: usa motorSeleccionarTurnoParaJornada.
-    //   - Los turnos manuales ya presentes viven en `mapa`.
+    // Completar jornadas después de priorizar cobertura. La cobertura
+    // mínima ya cumplida no impide asignar el resto de la semana.
     const fechasDelMes = motorFechasDelMes()
-    const semanasDelMes = [
-        ...new Set(fechasDelMes.map(motorInicioSemana))
-    ].sort()
-
+    const semanasDelMes = [...new Set(fechasDelMes.map(motorInicioSemana))].sort()
     let topupAsignaciones = 0
-    let semanasAlcanzadas = 0
-    let semanasTotales = 0
-
+    const busquedasLimitadas = []
+    const resultadosJornada = new Map()
     trabajadores.forEach(trabajador => {
-
-        const objetivo =
-            parseInt(trabajador.jornada) ||
-            MOTOR_MAX_HORAS_LEGALES_SEMANA
-
-        const esFijo = motorEsFijo(trabajador)
-
         semanasDelMes.forEach(inicioSemana => {
-
-            semanasTotales++
-
-            const fechasSemana =
-                fechasDelMes
-                    .filter(f => motorInicioSemana(f) === inicioSemana)
-                    .sort()
-
-            let horasFaltantes =
-                motorHorasFaltantesSemana(
-                    mapa,
-                    trabajador,
-                    `${inicioSemana}T00:00:00`
-                )
-
-            for(const fechaTexto of fechasSemana){
-
-                if(horasFaltantes <= 0){ break }
-
-                // Modo estricto: solo se asigna en días donde el trabajador
-                // tenga al menos una regla aplicable.
-                const reglas =
-                    motorReglasAplicables(trabajador, fechaTexto)
-
-                if(reglas.length === 0){ continue }
-
-                const claveFecha =
-                    motorClaveAsignacion(
-                        trabajador.id,
-                        fechaTexto
-                    )
-
-                const registroExistente =
-                    mapa.get(claveFecha)
-
-                // Si ya tiene un turno real o un estado intencional
-                // (Saliente / Vacaciones) lo respetamos. Los días marcados
-                // como "Libre" (o vacíos) se consideran no asignados y el
-                // top-up los puede sobrescribir para alcanzar la jornada.
-                if(
-                    registroExistente &&
-                    !motorEsNoAsignado(registroExistente.turno)
-                ){
-                    continue
-                }
-
-                const turno = esFijo
-                    ? motorTurnoFijoDelDia(trabajador, fechaTexto)
-                    : motorSeleccionarTurnoParaJornada(
-                        mapa,
-                        trabajador,
-                        fechaTexto,
-                        horasFaltantes
-                    )
-
-                if(!turno){ continue }
-
-                // Filtro de cobertura:
-                //   - Rotativos: deben aportar a un slot bajo minimo (modo
-                //     estricto anti-sobre-cobertura, pedido por el usuario).
-                //   - Fijos: el usuario configuró explícitamente este turno por
-                //     día, así que se asigna sin chequear sobre-cobertura. Solo
-                //     verificamos que el turno se solape con la ventana de
-                //     alguna regla aplicable (si no, el turno está mal
-                //     configurado para esa regla).
-                let pasaFiltroCobertura = false
-
-                if(esFijo){
-                    pasaFiltroCobertura = reglas.some(regla =>
-                        motorTurnoSeSolapaConRegla(
-                            turno,
-                            fechaTexto,
-                            regla
-                        )
-                    )
-                }else{
-                    pasaFiltroCobertura = motorTurnoCubreSlotSubcubierto(
-                        mapa,
-                        turno,
-                        fechaTexto,
-                        reglas
-                    )
-                }
-
-                if(!pasaFiltroCobertura){ continue }
-
-                // Verificación legal unificada (rotativos y fijos): cap de
-                // horas por jornada, descanso mínimo de 12h, máximo 6 días
-                // consecutivos. Para rotativos esto ya se chequeó dentro de
-                // motorSeleccionarTurnoParaJornada (filtro de candidatos),
-                // pero para fijos es crítico: motorTurnoFijoDelDia solo lee
-                // la configuración, no valida. Sin este check un fijo podría
-                // acumular más horas que su jornada semanal (o romper
-                // descanso si su configuración lo permite).
-                if(!motorCandidatoValido(
-                    mapa,
-                    trabajador,
-                    fechaTexto,
-                    turno
-                )){
-                    continue
-                }
-
-                const horas =
-                    calcularHorasSemana(
-                        [turno],
-                        colacionPorCeco(trabajador.ceco)
-                    )
-
-                const asignacion = {
-                    trabajador_id: trabajador.id,
-                    responsable: trabajador.responsable || "",
-                    fecha: fechaTexto,
-                    turno,
-                    horas,
-                    trabajador: trabajador.nombre,
-                    cargo: trabajador.cargo,
-                    regla: esFijo
-                        ? "Turno fijo"
-                        : "Top-up jornada",
-                    turno_anterior: registroExistente
-                        ? registroExistente.turno
-                        : "",
-                    accion: registroExistente
-                        ? "modificar"
-                        : "crear"
-                }
-
-                mapa.set(
-                    claveFecha,
-                    {
-                        ...asignacion,
-                        origen: "topup"
-                    }
-                )
-
-                asignaciones.push(asignacion)
-
-                topupAsignaciones++
-
-                horasFaltantes -= horas
-
-            }
-
-            // Cuenta la semana como alcanzada si quedó ≥ 95% del objetivo
-            // (tolerancia para redondeos de colación o turnos que se pasan
-            // ligeramente del target).
-            const horasFinales =
-                objetivo -
-                motorHorasFaltantesSemana(
-                    mapa,
-                    trabajador,
-                    `${inicioSemana}T00:00:00`
-                )
-
-            if(horasFinales >= objetivo * 0.95){
-                semanasAlcanzadas++
-            }
-
+            const fechas = fechasDelMes.filter(f => motorInicioSemana(f) === inicioSemana)
+            const resultado = motorCompletarSemana(mapa,mapaInicial,trabajador,fechas,inicioSemana)
+            resultadosJornada.set(motorClaveAsignacion(trabajador.id,inicioSemana),resultado)
+            resultado.cambios.forEach(a => {
+                const indice = asignaciones.findIndex(previa => String(previa.trabajador_id) === String(a.trabajador_id) && previa.fecha === a.fecha)
+                if(indice < 0) asignaciones.push(a)
+                else asignaciones[indice] = a
+            })
+            topupAsignaciones += resultado.cambios.length
+            if(resultado.limitada) busquedasLimitadas.push({trabajador:trabajador.nombre,semana:inicioSemana})
         })
-
     })
 
     // =====================================================
@@ -1481,7 +1275,7 @@ function construirPropuestaPlanificacionAutomatica(){
                 motorHorasFaltantesSemana(
                     mapa,
                     trabajador,
-                    `${inicioSemana}T00:00:00`
+                    inicioSemana
                 )
         })
 
@@ -1507,7 +1301,7 @@ function construirPropuestaPlanificacionAutomatica(){
                 jornada: objetivo,
                 minimo_turno: horasTurnoMasCorto
             })
-        }else if(asignacionesDel === 0){
+        }else if(asignacionesDel === 0 && horasMes === 0){
             diagnosticoTrabajadores.sin_dias.push({
                 id: trabajador.id,
                 nombre: trabajador.nombre,
@@ -1521,11 +1315,7 @@ function construirPropuestaPlanificacionAutomatica(){
                 jornada: objetivo,
                 semanas: semanasDelMes.length
             }
-            if(tieneReglasEnElMes){
-                diagnosticoTrabajadores.parcial_por_cobertura.push(item)
-            }else{
-                diagnosticoTrabajadores.parcial.push(item)
-            }
+            diagnosticoTrabajadores.parcial.push(item)
         }
 
     })
@@ -1595,14 +1385,16 @@ function construirPropuestaPlanificacionAutomatica(){
 
     })
 
+    const resultadoFinal = motorEvaluarResultadoFinal(mapa, trabajadores, fechasDelMes, reglas)
     const resumenSuficiencia =
         motorResumenSuficiencia(
             fechasDelMes.length,
-            reglasEvaluadas,
-            conflictos,
+            resultadoFinal.reglasEvaluadas,
+            resultadoFinal.conflictos,
             {
-                semanas_alcanzadas: semanasAlcanzadas,
-                semanas_totales: semanasTotales,
+                personal: resultadoFinal.personal,
+                semanas_alcanzadas: resultadoFinal.semanasAlcanzadas,
+                semanas_totales: resultadoFinal.semanasTotales,
                 topup_asignaciones: topupAsignaciones,
                 diagnostico: diagnosticoTrabajadores,
                 no_rotativos: noRotativos,
@@ -1616,74 +1408,75 @@ function construirPropuestaPlanificacionAutomatica(){
         anio: anioActual,
         cargos:
             [...(window.cargosSeleccionados || [])],
-        asignaciones,
-        conflictos,
-        suficiencia: resumenSuficiencia,
+        asignaciones: asignaciones.filter(a => {
+            const previo = mapaInicial.get(motorClaveAsignacion(a.trabajador_id,a.fecha))
+            return !previo || previo.turno !== a.turno || previo.responsable !== a.responsable || previo.horas !== a.horas
+        }).map(a => {
+            const previo = mapaInicial.get(motorClaveAsignacion(a.trabajador_id,a.fecha))
+            return {...a,turno_anterior:previo?.turno || "",accion:previo ? "modificar" : "crear"}
+        }),
+        trabajadores_ids: trabajadores.map(t => t.id),
+        conflictos: resultadoFinal.conflictos,
+        suficiencia: {...resumenSuficiencia,busquedas_limitadas:busquedasLimitadas,jornadas_pendientes:motorJornadasPendientes(mapa,trabajadores,fechasDelMes,resultadosJornada)},
         generado_en:
             new Date().toISOString()
     }
 
 }
 
-function motorCrearModal(){
+// Recalcular contra el resultado final, no contra brechas intermedias.
+function motorEvaluarResultadoFinal(mapa, trabajadores, fechas, reglas, cargos = window.cargosSeleccionados || []){
+    const conflictos = []
+    const puntosPendientes = []
+    let reglasEvaluadas = 0
+    if(!trabajadores.length) conflictos.push({tipo:"SIN_COLABORADORES",detalle:"No hay colaboradores disponibles para este equipo."})
+    if(!reglas.length) conflictos.push({tipo:"SIN_REGLAS_COBERTURA",detalle:"No existen reglas de cobertura activas."})
+    fechas.forEach(fecha => {
+        const dia = indiceDiaSemanaLunes(new Date(`${fecha}T00:00:00`))
+        reglas.filter(r => r.dia_semana === dia).forEach(regla => {
+            if(cargos.length && !trabajadores.some(t => trabajadorCumpleRegla(t, regla)) &&
+                !(regla.tipo === "cargo" && cargos.some(c => String(c).trim().toLowerCase() === String(regla.valor).trim().toLowerCase())) &&
+                !trabajadoresGlobal.some(t => cargos.includes(t.cargo) && trabajadorCumpleRegla(t, regla))) return
+            reglasEvaluadas++
+            const brechas = motorBrechasRegla(mapa, trabajadoresGlobal, regla, fecha)
+            if(brechas === null){
+                conflictos.push(motorCrearConflicto(regla,fecha,"La regla contiene un horario inválido."))
+            }else if(brechas.length){
+                brechas.forEach(b => puntosPendientes.push(motorDiagnosticarBrecha(mapa,trabajadores,regla,fecha,b)))
+                conflictos.push(motorCrearConflicto(regla,fecha,brechas.map(b=>
+                    `${etiquetaPuntoBrecha(b)}: dotación ${b.dotacion}/${b.minimo}, faltan ${b.faltan}`
+                ).join(" · ")))
+            }
+        })
+    })
+    const semanas = [...new Set(fechas.map(motorInicioSemana))]
+    let semanasAlcanzadas = 0
+    trabajadores.forEach(t => semanas.forEach(inicio => {
+        const objetivo = parseInt(t.jornada) || MOTOR_MAX_HORAS_LEGALES_SEMANA
+        const horas = motorHorasSemana(mapa,t,inicio)
+        if(horas >= objetivo * 0.95 && horas <= objetivo) semanasAlcanzadas++
+    }))
+    return {conflictos,reglasEvaluadas,semanasAlcanzadas,semanasTotales:trabajadores.length * semanas.length,personal:motorResumenPersonal(puntosPendientes,reglasEvaluadas,conflictos)}
+}
 
-    let modal =
-        document.getElementById(
-            "modal-planificacion-automatica"
-        )
-
-    if(modal){ return modal }
-
-    modal =
-        document.createElement("div")
-
-    modal.id =
-        "modal-planificacion-automatica"
-
-    modal.className =
-        "fixed inset-0 z-[80] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-
-    modal.innerHTML = `
-        <div class="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-                <div>
-                    <p class="text-xs font-black uppercase tracking-widest text-blue-600">
-                        Motor de asignación
-                    </p>
-                    <h2 class="mt-1 text-xl font-black text-slate-900">
-                        Propuesta de planificación automática
-                    </h2>
-                </div>
-                <button type="button"
-                    onclick="cerrarPropuestaPlanificacionAutomatica()"
-                    class="rounded-xl p-2 text-slate-500 hover:bg-slate-100">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-
-            <div id="contenido-propuesta-automatica"
-                class="flex-1 overflow-auto p-6"></div>
-
-            <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:justify-end">
-                <button type="button"
-                    onclick="cerrarPropuestaPlanificacionAutomatica()"
-                    class="rounded-xl border border-slate-300 px-5 py-3 font-bold text-slate-700 hover:bg-slate-50">
-                    Cancelar
-                </button>
-                <button type="button"
-                    id="btn-aprobar-planificacion-automatica"
-                    onclick="aprobarPlanificacionAutomatica()"
-                    class="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-                    Aprobar y aplicar
-                </button>
-            </div>
-        </div>
-    `
-
-    document.body.appendChild(modal)
-
-    return modal
-
+function motorActualizarResumenAplicado(propuesta){
+    const ids = new Set((propuesta.trabajadores_ids || propuesta.asignaciones.map(a=>a.trabajador_id)).map(String))
+    const trabajadores = trabajadoresGlobal.filter(t => ids.has(String(t.id)))
+    const resultado = motorEvaluarResultadoFinal(
+        motorMapaPlanificacionActual(), trabajadores,
+        motorFechasDelMes(propuesta.mes, propuesta.anio), motorReglasActivas(), propuesta.cargos
+    )
+    propuesta.conflictos = resultado.conflictos
+    propuesta.suficiencia = motorResumenSuficiencia(
+        motorFechasDelMes(propuesta.mes, propuesta.anio).length,
+        resultado.reglasEvaluadas, resultado.conflictos, {
+            personal:resultado.personal,
+            semanas_alcanzadas:resultado.semanasAlcanzadas,
+            semanas_totales:resultado.semanasTotales,
+            topup_asignaciones:propuesta.suficiencia?.topup_asignaciones || 0
+        }
+    )
+    propuesta.suficiencia.jornadas_pendientes = motorJornadasPendientes(motorMapaPlanificacionActual(),trabajadores,motorFechasDelMes(propuesta.mes,propuesta.anio))
 }
 
 function motorRenderDiagnostico(diagnostico, noRotativos, conflictosTurnoFijo){
@@ -1895,12 +1688,12 @@ function motorFilasAsignaciones(asignaciones){
                 </td>
                 <td class="p-3 text-center">
                     <span class="rounded-full px-2 py-1 text-xs font-bold ${
-                        asignacion.accion === "modificar"
+                        asignacion.accion === "existente" ? "bg-slate-100 text-slate-600" : asignacion.accion === "modificar"
                             ? "bg-amber-100 text-amber-700"
                             : "bg-emerald-100 text-emerald-700"
                     }">
                         ${
-                            asignacion.accion === "modificar"
+                            asignacion.accion === "existente" ? "Sin cambio" : asignacion.accion === "modificar"
                                 ? "Modifica"
                                 : "Nueva"
                         }
@@ -2003,389 +1796,81 @@ function motorConflictoCoincide(conflicto, queryNorm){
 // Re-pinta la tabla de asignaciones y el bloque de conflictos según el
 // contenido del input de búsqueda. La propuesta viva vive en la global
 // `propuestaPlanificacionAutomatica`.
-function motorFiltrarPropuestaAutomatica(){
-
-    const propuesta = propuestaPlanificacionAutomatica
-    if(!propuesta){ return }
-
-    const input =
-        document.getElementById("busqueda-propuesta-automatica")
-
-    const queryNorm =
-        normalizarTexto(input ? input.value : "")
-
-    const asignaciones =
-        propuesta.asignaciones.filter(a =>
-            motorAsignacionCoincide(a, queryNorm)
-        )
-
-    const conflictos =
-        propuesta.conflictos.filter(c =>
-            motorConflictoCoincide(c, queryNorm)
-        )
-
-    const tbody =
-        document.getElementById("tbody-propuesta-asignaciones")
-
-    if(tbody){
-        tbody.innerHTML = motorFilasAsignaciones(asignaciones)
+async function generarPlanificacionAutomatica(){
+    if(motorCargandoContexto || propuestaPlanificacionAutomatica?.estado === "APLICANDO") return
+    if(!(adminAutorizado && obtenerToken())){ iniciarSesion(); return }
+    motorCargandoContexto = true
+    const mes = mesActual, anio = anioActual
+    try{
+        const contexto = await obtenerContextoAutomatico()
+        if(mes !== mesActual || anio !== anioActual) return
+        trabajadoresGlobal = contexto.trabajadores
+        planificacionGlobal = contexto.planificacion
+        coberturaConfigGlobal = contexto.cobertura
+        colacionConfigGlobal = contexto.colacion
+        turnosFrecuentesGlobal = contexto.turnos
+        actualizarVistaPlanificacion()
+        propuestaPlanificacionAutomatica = construirPropuestaPlanificacionAutomatica()
+        propuestaPlanificacionAutomatica.revision = contexto.revision
+        motorRenderizarPropuesta(propuestaPlanificacionAutomatica)
+    }catch(error){
+        alert(error.message || "No se pudo actualizar la planificación antes de generar.")
+    }finally{
+        motorCargandoContexto = false
     }
-
-    const contenedor =
-        document.getElementById("contenedor-propuesta-conflictos")
-
-    if(contenedor){
-        contenedor.innerHTML = motorBloqueConflictos(conflictos)
-    }
-
-    const contador =
-        document.getElementById("contador-propuesta-asignaciones")
-
-    if(contador){
-        contador.textContent =
-            `${asignaciones.length} / ${propuesta.asignaciones.length}`
-    }
-
-}
-
-function motorRenderizarPropuesta(propuesta){
-
-    const modal =
-        motorCrearModal()
-
-    const contenido =
-        modal.querySelector(
-            "#contenido-propuesta-automatica"
-        )
-
-    const cargo =
-        propuesta.cargos.length > 0
-            ? propuesta.cargos.join(", ")
-            : "Todos los cargos"
-
-    const filasAsignaciones =
-        motorFilasAsignaciones(propuesta.asignaciones)
-
-    const suficiencia =
-        propuesta.suficiencia || {
-            reglas_evaluadas: 0,
-            reglas_cubiertas: 0,
-            reglas_sin_cubrir: 0,
-            personal_suficiente: propuesta.conflictos.length === 0,
-            semanas_alcanzadas: 0,
-            semanas_totales: 0,
-            topup_asignaciones: 0,
-            diagnostico: {
-                jornada_baja: [],
-                sin_dias: [],
-                parcial: [],
-                parcial_por_cobertura: []
-            },
-            no_rotativos: [],
-            conflictos_turno_fijo: [],
-            mensaje:
-                propuesta.conflictos.length === 0
-                    ? "El personal disponible permite cumplir la cobertura configurada."
-                    : "Se requiere más personal disponible o ajustar turnos para cumplir toda la cobertura.",
-            mensaje_jornada: ""
-        }
-
-    const diagnostico = suficiencia.diagnostico || {
-        jornada_baja: [],
-        sin_dias: [],
-        parcial: [],
-        parcial_por_cobertura: []
-    }
-    const noRotativos = suficiencia.no_rotativos || []
-    const conflictosTurnoFijo = suficiencia.conflictos_turno_fijo || []
-
-    const asignacionesModificadas =
-        propuesta.asignaciones.filter(asignacion =>
-            asignacion.accion === "modificar"
-        ).length
-
-    const asignacionesNuevas =
-        propuesta.asignaciones.length - asignacionesModificadas
-
-    const conflictos =
-        motorBloqueConflictos(propuesta.conflictos)
-
-    contenido.innerHTML = `
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div class="rounded-2xl bg-blue-50 p-4">
-                <p class="text-xs font-black uppercase text-blue-600">Estado</p>
-                <p class="mt-1 font-black text-slate-900">Pendiente de aprobación</p>
-            </div>
-            <div class="rounded-2xl bg-emerald-50 p-4">
-                <p class="text-xs font-black uppercase text-emerald-600">Asignaciones</p>
-                <p class="mt-1 text-2xl font-black text-slate-900">
-                    ${propuesta.asignaciones.length}
-                </p>
-            </div>
-            <div class="rounded-2xl bg-violet-50 p-4">
-                <p class="text-xs font-black uppercase text-violet-600">Cambios</p>
-                <p class="mt-1 text-sm font-black text-slate-900">
-                    ${asignacionesNuevas} nuevas · ${asignacionesModificadas} modificadas
-                </p>
-            </div>
-            <div class="rounded-2xl bg-amber-50 p-4">
-                <p class="text-xs font-black uppercase text-amber-600">Conflictos</p>
-                <p class="mt-1 text-2xl font-black text-slate-900">
-                    ${propuesta.conflictos.length}
-                </p>
-            </div>
-            <div class="rounded-2xl bg-indigo-50 p-4">
-                <p class="text-xs font-black uppercase text-indigo-600">Jornada semanal</p>
-                <p class="mt-1 text-2xl font-black text-slate-900">
-                    ${suficiencia.semanas_alcanzadas}/${suficiencia.semanas_totales}
-                </p>
-                <p class="mt-1 text-xs font-semibold text-slate-600">
-                    ${suficiencia.topup_asignaciones || 0} turnos añadidos
-                </p>
-            </div>
-        </div>
-
-        <div class="mt-4 rounded-2xl border ${
-            suficiencia.personal_suficiente
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-800"
-        } p-4 text-sm">
-            <div class="flex items-start gap-3">
-                <span class="material-symbols-outlined">
-                    ${suficiencia.personal_suficiente ? "check_circle" : "error"}
-                </span>
-                <div>
-                    <p class="font-black">
-                        ${
-                            suficiencia.personal_suficiente
-                                ? "Personal suficiente"
-                                : "Personal insuficiente"
-                        }
-                    </p>
-                    <p class="mt-1">
-                        ${escaparHTML(suficiencia.mensaje)}
-                    </p>
-                    <p class="mt-1 text-xs font-semibold">
-                        Cobertura: ${suficiencia.reglas_cubiertas}/${suficiencia.reglas_evaluadas}
-                        reglas cubiertas.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        ${
-            suficiencia.mensaje_jornada
-                ? `
-        <div class="mt-3 rounded-2xl border border-indigo-200 bg-indigo-50/60 text-indigo-800 p-4 text-sm">
-            <div class="flex items-start gap-3">
-                <span class="material-symbols-outlined">
-                    ${suficiencia.semanas_alcanzadas === suficiencia.semanas_totales
-                        ? "check_circle"
-                        : "schedule"}
-                </span>
-                <div>
-                    <p class="font-black">Jornada completada</p>
-                    <p class="mt-1">
-                        ${escaparHTML(suficiencia.mensaje_jornada)}
-                    </p>
-                </div>
-            </div>
-        </div>`
-                : ""
-        }
-
-        ${
-            motorRenderDiagnostico(
-                diagnostico,
-                noRotativos,
-                conflictosTurnoFijo
-            )
-        }
-
-        <div class="mt-4 rounded-2xl border border-slate-200 p-4 text-sm text-slate-600">
-            <strong>Filtro:</strong> ${escaparHTML(cargo)}.
-            La propuesta puede crear turnos nuevos o modificar turnos existentes para cubrir la demanda.
-        </div>
-
-        <section class="mt-6">
-            <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h3 class="text-lg font-black text-slate-900">
-                    Asignaciones propuestas
-                </h3>
-                <div class="flex flex-1 items-center gap-2 sm:max-w-md">
-                    <label class="relative flex-1">
-                        <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
-                            search
-                        </span>
-                        <input id="busqueda-propuesta-automatica" type="search"
-                            oninput="motorFiltrarPropuestaAutomatica()"
-                            placeholder="Buscar por cargo, ceco, área o nombre…"
-                            autocomplete="off"
-                            class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
-                    </label>
-                    <span id="contador-propuesta-asignaciones"
-                        class="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                        ${propuesta.asignaciones.length} / ${propuesta.asignaciones.length}
-                    </span>
-                </div>
-            </div>
-            <div class="overflow-auto rounded-2xl border border-slate-200">
-                <table class="w-full min-w-[760px] text-sm">
-                    <thead class="bg-slate-900 text-left text-white">
-                        <tr>
-                            <th class="p-3">Colaborador</th>
-                            <th class="p-3">Cargo</th>
-                            <th class="p-3">Fecha</th>
-                            <th class="p-3 text-center">Turno</th>
-                            <th class="p-3 text-center">Horas</th>
-                            <th class="p-3 text-center">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-propuesta-asignaciones">${filasAsignaciones}</tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="mt-6">
-            <h3 class="mb-3 text-lg font-black text-slate-900">
-                Conflictos detectados
-            </h3>
-            <div id="contenedor-propuesta-conflictos" class="space-y-3">${conflictos}</div>
-        </section>
-    `
-
-    const boton =
-        modal.querySelector(
-            "#btn-aprobar-planificacion-automatica"
-        )
-
-    boton.disabled =
-        propuesta.asignaciones.length === 0
-
-    modal.classList.remove("hidden")
-    modal.classList.add("flex")
-
-}
-
-function cerrarPropuestaPlanificacionAutomatica(){
-
-    const modal =
-        document.getElementById(
-            "modal-planificacion-automatica"
-        )
-
-    if(!modal){ return }
-
-    modal.classList.add("hidden")
-    modal.classList.remove("flex")
-
-}
-
-function generarPlanificacionAutomatica(){
-
-    // Abrir el modal de propuesta también exige sesión: el "Aprobar y aplicar"
-    // que viene detrás golpea /planificacion/lote, que ya está protegido.
-    if(!(adminAutorizado && obtenerToken())){
-        iniciarSesion()
-        return
-    }
-
-    propuestaPlanificacionAutomatica =
-        construirPropuestaPlanificacionAutomatica()
-
-    motorRenderizarPropuesta(
-        propuestaPlanificacionAutomatica
-    )
-
 }
 
 async function aprobarPlanificacionAutomatica(){
-
-    const propuesta =
-        propuestaPlanificacionAutomatica
-
-    if(
-        !propuesta ||
-        propuesta.estado !== "PENDIENTE_APROBACION" ||
-        propuesta.asignaciones.length === 0
-    ){
+    const propuesta = propuestaPlanificacionAutomatica
+    if(propuesta?.estado === "OBSOLETA"){ await generarPlanificacionAutomatica(); return }
+    if(!propuesta || propuesta.estado !== "PENDIENTE_APROBACION" || !propuesta.asignaciones.length) return
+    if(!(adminAutorizado && obtenerToken())){ iniciarSesion(); return }
+    propuesta.estado = "APLICANDO"
+    const boton = document.getElementById("btn-aprobar-planificacion-automatica")
+    if(boton){ boton.disabled = true; boton.textContent = "Aplicando..." }
+    const asignaciones = propuesta.asignaciones.map(a => ({
+        trabajador_id:a.trabajador_id,responsable:a.responsable,fecha:a.fecha,turno:a.turno,horas:a.horas
+    }))
+    try{
+        const respuesta = await guardarPlanificacionAutomatica(propuesta, asignaciones)
+        if(!respuesta.ok){
+            let mensaje = respuesta.status === 401 ? "Sesión expirada. Inicia sesión nuevamente." : "No se pudo aplicar la propuesta."
+            try{ const error = await respuesta.json(); if(typeof error.detail === "string") mensaje = error.detail }catch{}
+            const error = new Error(mensaje)
+            error.status = respuesta.status
+            throw error
+        }
+    }catch(error){
+        if(error.status === 409){
+            propuesta.estado = "OBSOLETA"
+            propuesta.aviso_recarga = error.message
+            motorRenderizarPropuesta(propuesta)
+            return
+        }
+        propuesta.estado = "PENDIENTE_APROBACION"
+        if(boton){ boton.disabled = false; boton.textContent = `Aplicar ${propuesta.asignaciones.length} cambios` }
+        alert(error.message || "No se pudo aplicar la propuesta.")
         return
     }
 
-    const boton =
-        document.getElementById(
-            "btn-aprobar-planificacion-automatica"
-        )
-
-    if(boton){
-        boton.disabled = true
-        boton.textContent = "Aplicando..."
-    }
-
-    const asignaciones =
-        propuesta.asignaciones.map(asignacion => ({
-            trabajador_id: asignacion.trabajador_id,
-            responsable: asignacion.responsable,
-            fecha: asignacion.fecha,
-            turno: asignacion.turno,
-            horas: asignacion.horas
-        }))
-
+    // Un fallo al recargar no debe volver a habilitar un lote ya guardado.
+    propuesta.estado = "APROBADA"
+    asignaciones.forEach(a => {
+        const existente = planificacionGlobal.find(p => String(p.trabajador_id) === String(a.trabajador_id) && String(p.fecha).slice(0,10) === a.fecha)
+        if(existente) Object.assign(existente,a)
+        else planificacionGlobal.push({...a})
+    })
     try{
-
-        const respuesta =
-            await guardarPlanificacionLote(
-                asignaciones
-            )
-
-        if(!respuesta.ok){
-
-            if(respuesta.status === 401){
-                alert("Sesión expirada. Inicia sesión nuevamente.")
-                cerrarSesionAdmin()
-                return
-            }
-
-            let mensaje =
-                "No se pudo aplicar la propuesta."
-
-            try{
-                const error =
-                    await respuesta.json()
-
-                if(error.detail){
-                    mensaje = error.detail
-                }
-            }catch(error){}
-
-            throw new Error(mensaje)
-
-        }
-
-        propuesta.estado = "APROBADA"
-
-        planificacionGlobal =
-            await obtenerPlanificacion()
-
-        filtrarCargo()
-        cerrarPropuestaPlanificacionAutomatica()
-
-        alert(
-            `Planificación aplicada: ${asignaciones.length} asignaciones.`
-        )
-
-    }catch(error){
-
-        alert(
-            error.message ||
-            "No se pudo aplicar la propuesta."
-        )
-
-        if(boton){
-            boton.disabled = false
-            boton.textContent = "Aprobar y aplicar"
-        }
-
+        const guardada = await obtenerPlanificacion()
+        if(!Array.isArray(guardada)) throw new Error("Respuesta inválida")
+        planificacionGlobal = guardada
+        propuesta.aviso_recarga = ""
+    }catch{
+        propuesta.aviso_recarga = "Los turnos fueron guardados, pero no se pudo recargar el servidor. El resumen usa el lote confirmado; recarga la vista para sincronizar."
     }
-
+    motorActualizarResumenAplicado(propuesta)
+    propuesta.pestana = "resumen"
+    propuesta.brechaRevisada = null
+    actualizarVistaPlanificacion()
+    motorRenderizarPropuesta(propuesta)
 }
