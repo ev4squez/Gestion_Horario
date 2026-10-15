@@ -243,36 +243,27 @@ async function abrirVistaInicialSesion(){
 }
 
 async function inicializarSesion(){
+    document.body.classList.add("sesion-inicializando")
+    try{
+        adminAutorizado = obtenerToken() ? await verificarSesion() : false
+        if(!adminAutorizado) borrarToken()
 
-    if(obtenerToken()){
-        const valido = await verificarSesion()
-        if(!valido){
-            adminAutorizado = false
-            borrarToken()
+        actualizarBotonSesion()
+        actualizarBloqueoPlanificacion()
+
+        if(adminAutorizado){
+            await abrirVistaInicialSesion()
         }else{
-            adminAutorizado = true
+            document.body.classList.remove("modo-saas")
+            ocultarTodasLasVistas()
+            iniciarSesion()
         }
-    }else{
-        adminAutorizado = false
+    }finally{
+        document.body.classList.remove("sesion-inicializando")
+        document.getElementById("sesion-cargando")?.remove()
     }
-
-    actualizarBotonSesion()
-
-    actualizarBloqueoPlanificacion()
-
-    if(adminAutorizado){
-
-        await abrirVistaInicialSesion()
-
-    }else{
-
-        // Sin sesión válida: la planificación está oculta, así que abrimos el
-        // modal de inmediato para que el usuario no vea una pantalla vacía.
-        iniciarSesion()
-
-    }
-
 }
+
 
 document.addEventListener("DOMContentLoaded", () => {
 

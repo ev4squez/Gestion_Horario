@@ -198,13 +198,12 @@ async function verificarSesion(){
         if(!response.ok){ return false }
         const data = await response.json()
         if(data && data.empresa){ guardarEmpresa(data.empresa) }
-        // Si /me no devuelve empresa, el usuario es super-admin global
-        // (los super-admins tienen empresa_id=NULL y ctx.empresa_slug=None,
-        // por lo que data.empresa llega como {id:null, slug:null, nombre:null}
-        // desde el backend). En cualquier caso, sincronizamos el flag para
-        // que obtenerEsSuperAdmin() devuelva el valor correcto tras un
-        // reload de la página.
-        const esSuperAdmin = !data || !data.empresa || data.empresa.id == null
+        // El servidor confirma el rol. Compatibilidad con versiones anteriores
+        // de /me: solo se infiere cuando hay una respuesta de sesión válida.
+        if(!data || !data.username){ return false }
+        const esSuperAdmin = typeof data.es_super_admin === "boolean"
+            ? data.es_super_admin
+            : !data.empresa || data.empresa.id == null
         guardarEsSuperAdmin(esSuperAdmin)
         return true
     } catch (e) {

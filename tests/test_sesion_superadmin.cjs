@@ -50,3 +50,40 @@ test('usuario de empresa conserva planificación y sus menús al recuperar sesi�
         assert(!doc.getElementById(id).classList.contains('hidden'),id);
     assert(doc.getElementById('menu-saas-admin').classList.contains('hidden'));
 });
+
+test('recarga usa /me real, espera validación y respeta rol explícito del servidor',async()=>{
+    const {c,doc,cargas}=await contexto(false);
+    c.sessionStorage=c.window.sessionStorage;
+    vm.runInContext(fs.readFileSync('frontend/js/api.js','utf8'),c);
+    c.guardarToken('token-super');c.guardarEsSuperAdmin(false);
+    let responder;
+    c.fetch=()=>new Promise(resolve=>{responder=resolve});
+    const inicio=c.inicializarSesion();
+    assert(doc.body.classList.contains('sesion-inicializando'));
+    assert(doc.getElementById('sesion-cargando'));
+    responder({ok:true,json:async()=>({username:'superadmin',es_super_admin:true,empresa:{id:1,nombre:'Dato anterior'}})});
+    await inicio;soloSaas(doc);assert.equal(cargas(),0);
+    assert(!doc.body.classList.contains('sesion-inicializando'));
+    assert.equal(doc.getElementById('sesion-cargando'),null);
+});
+
+test('recarga de usuario de empresa elimina un flag de superadmin obsoleto',async()=>{
+    const {c,doc,cargas}=await contexto(true);c.sessionStorage=c.window.sessionStorage;
+    vm.runInContext(fs.readFileSync('frontend/js/api.js','utf8'),c);
+    c.guardarToken('token-empresa');c.guardarEsSuperAdmin(true);
+    c.fetch=async()=>({ok:true,json:async()=>({username:'persona',es_super_admin:false,empresa:{id:7,nombre:'Empresa'}})});
+    await c.inicializarSesion();assert.equal(cargas(),1);assert(!c.obtenerEsSuperAdmin());
+    assert(!doc.body.classList.contains('modo-saas'));
+});
+
+test('recarga compatible con /me anterior y token inválido vuelve al login',async()=>{
+    const {c,doc}=await contexto(true);c.sessionStorage=c.window.sessionStorage;
+    vm.runInContext(fs.readFileSync('frontend/js/api.js','utf8'),c);
+    c.guardarToken('token-super');
+    c.fetch=async()=>({ok:true,json:async()=>({username:'superadmin',empresa:{id:null,slug:null,nombre:null}})});
+    await c.inicializarSesion();soloSaas(doc);
+    c.fetch=async()=>({ok:false});await c.inicializarSesion();
+    assert(!doc.body.classList.contains('modo-saas'));assert(!doc.body.classList.contains('sesion-inicializando'));
+    assert(!doc.getElementById('modal-login-admin').classList.contains('hidden'));
+    assert.equal(c.obtenerToken(),'');
+});

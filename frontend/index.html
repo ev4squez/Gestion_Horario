@@ -345,6 +345,20 @@
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    body.sesion-inicializando #sidebar,
+    body.sesion-inicializando main,
+    body.sesion-inicializando #vista-saas-admin {
+      visibility: hidden !important;
+    }
+    #sesion-cargando {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #64748b;
+      background: #f8fafc;
+    }
+
     /* ── MODO SAAS ADMIN (vista dedicada fullscreen) ─ */
     /* El super-admin no necesita ver NADA más: ni sidebar, ni header
        principal, ni panel derecho, ni siquiera el header dedicado que
@@ -483,7 +497,8 @@
   <link rel="stylesheet" href="css/admin-theme.css" />
 </head>
 
-<body>
+<body class="sesion-inicializando">
+  <div id="sesion-cargando" role="status">Cargando sesión…</div>
   <div class="flex flex-col xl:flex-row min-h-screen xl:h-screen xl:overflow-hidden">
     <!-- ══════════════════════════════════════ -->
     <!-- SIDEBAR                               -->
@@ -1650,7 +1665,7 @@
   </datalist>
 
   <!-- JS (sin cambios) -->
-  <script src="js/api.js"></script>
+  <script src="js/api.js?v=20261015-saas-session"></script>
   <script src="js/calendario.js"></script>
   <script src="js/resumen.js"></script>
   <script src="js/cobertura.js"></script>
@@ -1671,18 +1686,18 @@
   <script src="js/pdf/tabla.js"></script>
   <script src="js/pdf.js"></script>
 
-  <script src="js/admin/auth.js"></script>
+  <script src="js/admin/auth.js?v=20261015-saas-session"></script>
   <script src="js/admin/saas-admin.js"></script>
   <script src="js/admin/usuarios.js"></script>
   <script src="js/admin/turnos-frecuentes.js"></script>
-  <script src="js/admin/modal.js"></script>
+  <script src="js/admin/modal.js?v=20261015-saas-session"></script>
   <script src="js/admin/trabajadores.js"></script>
   <script src="js/admin/importar.js"></script>
   <script src="js/admin/crud.js"></script>
 
   <!-- SCRIPTS (sin cambios en lógica) -->
   <script>
-    let adminAutorizado = !!localStorage.getItem("authToken");
+    let adminAutorizado = false;
   </script>
 
   <!-- ===================================== -->

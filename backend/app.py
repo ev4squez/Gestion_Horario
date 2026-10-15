@@ -779,6 +779,7 @@ def logout(authorization: str = Header(default="")):
 def me(ctx: dict = Depends(require_token)):
     return {
         "username": ctx["username"],
+        "es_super_admin": bool(ctx.get("es_super_admin", False)),
         "empresa": {
             "id": ctx["empresa_id"],
             "slug": ctx["empresa_slug"],
