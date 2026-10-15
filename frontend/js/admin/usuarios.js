@@ -7,6 +7,8 @@ window.busquedaUsuarios = window.busquedaUsuarios || ""
 
 async function mostrarVistaUsuarios(){
 
+    if(redirigirSuperAdmin()) return
+
     // Defensa: la vista solo tiene sentido con sesión activa.
     if(!(adminAutorizado && obtenerToken())){
         iniciarSesion()

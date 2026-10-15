@@ -1,3 +1,15 @@
+function sesionSuperAdminActiva(){
+    return typeof adminAutorizado !== "undefined" && adminAutorizado &&
+        typeof obtenerToken === "function" && !!obtenerToken() &&
+        typeof obtenerEsSuperAdmin === "function" && obtenerEsSuperAdmin()
+}
+
+function redirigirSuperAdmin(){
+    if(!sesionSuperAdminActiva()) return false
+    mostrarVistaSaasAdmin()
+    return true
+}
+
 function marcarMenuActivo(idBoton) {
 
     document
@@ -99,6 +111,8 @@ window.busquedaTrabajadores = window.busquedaTrabajadores || ""
 
 function mostrarVistaTrabajadores() {
 
+    if(redirigirSuperAdmin()) return
+
     marcarMenuActivo("menu-colaboradores")
 
     ocultarTodasLasVistas()
@@ -112,6 +126,8 @@ function mostrarVistaTrabajadores() {
 }
 
 function mostrarVistaPlanificacion(seleccionarCargos = true) {
+
+    if(redirigirSuperAdmin()) return
 
     // La planificación ahora exige sesión: el backend rechaza GET/POST sin
     // token, así que el cliente también bloquea el render hasta loguearse.
@@ -140,6 +156,8 @@ function mostrarVistaPlanificacion(seleccionarCargos = true) {
 
 function mostrarVistaCobertura() {
 
+    if(redirigirSuperAdmin()) return
+
     // Cobertura solo está disponible con sesión iniciada.
     if(!(adminAutorizado && obtenerToken())){
         iniciarSesion()
@@ -159,6 +177,8 @@ function mostrarVistaCobertura() {
 }
 
 function mostrarVistaAlertas(){
+
+    if(redirigirSuperAdmin()) return
 
     // Alertas solo está disponible con sesión iniciada.
     if(!(adminAutorizado && obtenerToken())){
@@ -665,7 +685,7 @@ function mostrarVistaSaasAdmin(){
     // planificación en vez de mostrar la vista. Cubre el caso de un
     // localStorage con valor stale (ya no debería pasar con sessionStorage,
     // pero por las dudas).
-    if(typeof obtenerEsSuperAdmin !== "function" || !obtenerEsSuperAdmin()){
+    if(!sesionSuperAdminActiva()){
         if(typeof obtenerToken !== "function" || !obtenerToken()){
             iniciarSesion()
         }else{
@@ -710,6 +730,8 @@ function mostrarVistaSaasAdmin(){
 }
 
 function salirModoSaas(){
+
+    if(redirigirSuperAdmin()) return
 
     // Sale del modo fullscreen: oculta la vista SAAS (que ahora es
     // overlay absoluto) y vuelve a la vista de planificación.

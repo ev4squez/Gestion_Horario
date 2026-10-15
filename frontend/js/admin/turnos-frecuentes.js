@@ -158,6 +158,8 @@ function renderizarTurnosFrecuentes(){
 
 async function mostrarVistaTurnosFrecuentes(){
 
+    if(redirigirSuperAdmin()) return
+
     if(!(adminAutorizado && obtenerToken())){
         iniciarSesion()
         return

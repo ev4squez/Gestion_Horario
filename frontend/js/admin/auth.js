@@ -107,14 +107,7 @@ async function validarAdmin(){
 
     cerrarModalAdmin()
 
-    // Cargar los datos que necesita la planificación (trabajadores, turnos,
-    // cobertura, colación). Sin esto, al navegar a la grilla aparecería vacía
-    // porque el bootstrap normal solo corre con token ya guardado en localStorage.
-    if(typeof cargarSistema === "function"){
-        await cargarSistema()
-    }
-
-    mostrarVistaPlanificacion()
+    await abrirVistaInicialSesion()
 
 }
 
@@ -181,6 +174,7 @@ async function cerrarSesionAdmin(){
 function actualizarBloqueoPlanificacion(){
 
     const sesionActiva = !!(adminAutorizado && obtenerToken())
+    const superadmin = sesionSuperAdminActiva()
 
     const toggle = (id, visible) => {
         const el = document.getElementById(id)
@@ -188,9 +182,9 @@ function actualizarBloqueoPlanificacion(){
         el.classList.toggle("hidden", !visible)
     }
 
-    toggle("vista-planificacion", sesionActiva)
+    toggle("vista-planificacion", sesionActiva && !superadmin)
     toggle("planificacion-bloqueada", !sesionActiva)
-    toggle("right-panel", sesionActiva)
+    toggle("right-panel", sesionActiva && !superadmin)
 
 }
 
@@ -204,12 +198,16 @@ function actualizarBotonSesion(){
 
     mostrar("btn-login", !adminAutorizado)
     mostrar("btn-logout", adminAutorizado)
-    mostrar("menu-turnos-frecuentes", adminAutorizado)
-    mostrar("menu-cobertura", adminAutorizado)
-    mostrar("menu-colaboradores", adminAutorizado)
-    mostrar("menu-usuarios", adminAutorizado)
-    mostrar("menu-saas-admin", adminAutorizado && (typeof obtenerEsSuperAdmin === "function" ? obtenerEsSuperAdmin() : false))
-    mostrar("badge-empresa-sidebar", adminAutorizado)
+    const superadmin = sesionSuperAdminActiva()
+    const empresaActiva = adminAutorizado && !superadmin
+    mostrar("menu-planificacion", !superadmin)
+    mostrar("menu-alertas", !superadmin)
+    mostrar("menu-turnos-frecuentes", empresaActiva)
+    mostrar("menu-cobertura", empresaActiva)
+    mostrar("menu-colaboradores", empresaActiva)
+    mostrar("menu-usuarios", empresaActiva)
+    mostrar("menu-saas-admin", superadmin)
+    mostrar("badge-empresa-sidebar", empresaActiva)
 
     // Nombre del usuario en el botón de cerrar sesión.
     const texto = document.getElementById("texto-sesion")
@@ -233,6 +231,17 @@ function actualizarBotonSesion(){
 // Si hay un token guardado, se valida contra el backend; si ya no es válido
 // (p. ej. el servidor se reinició), se limpia la sesión del cliente.
 
+// El superadmin administra empresas; no carga datos de planificación.
+async function abrirVistaInicialSesion(){
+    if(sesionSuperAdminActiva()){
+        mostrarVistaSaasAdmin()
+        return
+    }
+    document.body.classList.remove("modo-saas")
+    if(typeof cargarSistema === "function") await cargarSistema()
+    mostrarVistaPlanificacion()
+}
+
 async function inicializarSesion(){
 
     if(obtenerToken()){
@@ -253,15 +262,7 @@ async function inicializarSesion(){
 
     if(adminAutorizado){
 
-        // Solo cargamos datos si la sesión es válida: las llamadas a
-        // /planificacion ahora requieren token y devolverían 401 en otro caso.
-        if(typeof cargarSistema === "function"){
-            await cargarSistema()
-        }
-
-        if(typeof mostrarVistaPlanificacion === "function"){
-            mostrarVistaPlanificacion()
-        }
+        await abrirVistaInicialSesion()
 
     }else{
 

@@ -639,7 +639,9 @@ async function listarUsuariosEmpresaSaas(empresaId){
         `/superadmin/empresas/${empresaId}/usuarios`,
         { headers: authHeaders() }
     )
-    if(!response.ok){ return [] }
+    if(!response.ok){
+        throw new Error(await leerMensajeRespuestaError(response, "No se pudieron cargar los usuarios de la empresa"))
+    }
     return await response.json()
 }
 

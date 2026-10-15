@@ -435,6 +435,8 @@ async function abrirModalUsuariosEmpresaSaas(empresaId){
     const modal = document.getElementById("modal-usuarios-empresa-saas")
     modal.classList.remove("hidden")
     modal.style.display = "flex"
+    document.getElementById("saas-usuario-estado").textContent = ""
+    document.getElementById("saas-usuario-nuevo-username").focus()
 
     await cargarUsuariosEmpresaSaas()
 
@@ -464,8 +466,17 @@ async function cargarUsuariosEmpresaSaas(){
     const tbody = document.getElementById("cuerpo-usuarios-empresa-saas")
     if(!tbody){ return }
 
-    const usuarios = await listarUsuariosEmpresaSaas(empresaId)
-    if(!usuarios){ return }
+    tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-500">Cargando usuarios…</td></tr>'
+    let usuarios
+    try{
+        usuarios = await listarUsuariosEmpresaSaas(empresaId)
+    }catch(e){
+        if(window.empresaSaasActual?.id !== empresaId) return
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-700">${escaparHTML(e.message || "No se pudieron cargar los usuarios")}
+            <button type="button" onclick="cargarUsuariosEmpresaSaas()">Reintentar</button></td></tr>`
+        return
+    }
+    if(window.empresaSaasActual?.id !== empresaId) return
 
     if(usuarios.length === 0){
         tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-500">Esta empresa aún no tiene usuarios.</td></tr>'
@@ -505,23 +516,35 @@ async function crearUsuarioEmpresaSaas(){
     const nombre = (document.getElementById("saas-usuario-nuevo-nombre")?.value || "").trim()
     const password = document.getElementById("saas-usuario-nuevo-password")?.value || ""
 
+    const estado = document.getElementById("saas-usuario-estado")
+    const boton = document.getElementById("saas-usuario-crear")
+    if(boton.disabled) return
     if(!username || !password){
-        alert("username y contraseña son obligatorios")
+        estado.textContent = "Usuario y contraseña son obligatorios."
         return
     }
 
+    const empresaId = window.empresaSaasActual.id
+    boton.disabled = true
+    estado.textContent = "Creando usuario…"
     try{
-        await crearUsuarioEmpresaSaasApi(window.empresaSaasActual.id, {
+        await crearUsuarioEmpresaSaasApi(empresaId, {
             username, password, nombre, activo: true
         })
+        if(window.empresaSaasActual?.id !== empresaId) return
+        estado.textContent = `Usuario ${username} creado en ${window.empresaSaasActual.nombre}.`
         document.getElementById("saas-usuario-nuevo-username").value = ""
         document.getElementById("saas-usuario-nuevo-nombre").value = ""
         document.getElementById("saas-usuario-nuevo-password").value = ""
         await cargarUsuariosEmpresaSaas()
         // Refrescamos stats globales también
-        await cargarEmpresasSaaS()
+        try{ await cargarEmpresasSaaS() }catch(e){ /* El usuario ya fue creado. */ }
     }catch(e){
-        alert(e.message || "No se pudo crear el usuario")
+        if(window.empresaSaasActual?.id === empresaId){
+            estado.textContent = e.message || "No se pudo crear el usuario"
+        }
+    }finally{
+        boton.disabled = false
     }
 
 }
