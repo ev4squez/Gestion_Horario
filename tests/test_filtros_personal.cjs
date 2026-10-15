@@ -58,3 +58,33 @@ test('volver a planificación refleja el estado actualizado sin cambiar cargo, b
     assert.equal(c.window.cargosSeleccionados[0],'Técnico');
     assert.equal(input.value,'Ana');assert.equal(c.mesActual,9);assert.equal(c.anioActual,2026);
 });
+
+function agregarPaginador(doc){
+    const bloque=doc.createElement('div');bloque.innerHTML='<span id="personal-resultados"></span><span id="personal-pagina"></span><button id="personal-anterior"></button><button id="personal-siguiente"></button><select id="personal-por-pagina"><option>10</option><option>20</option><option>50</option></select>';doc.body.appendChild(bloque);
+}
+test('pagina todos los colaboradores sin omitir ni repetir resultados y cambia tamaño',()=>{
+    const {c,doc}=contexto();agregarPaginador(doc);
+    c.trabajadoresGlobal=Array.from({length:35},(_,i)=>({id:i+1,nombre:`Persona ${i+1}`,activo:true}));
+    c.aplicarFiltrosTrabajadores();assert.equal(doc.querySelectorAll('#tabla-trabajadores-body tr').length,10);
+    assert.equal(doc.getElementById('personal-resultados').textContent,'Mostrando 1–10 de 35 colaboradores');
+    assert(doc.getElementById('personal-anterior').disabled);
+    const nombres=[];
+    for(let p=0;p<4;p++){
+        nombres.push(...[...doc.querySelectorAll('#tabla-trabajadores-body tr td:first-child')].map(t=>t.textContent.trim().split('\n')[0].trim()));
+        if(p<3) c.cambiarPaginaTrabajadores(1);
+    }
+    assert.equal(nombres.length,35);assert.equal(new Set(nombres).size,35);
+    assert(doc.getElementById('personal-siguiente').disabled);
+    c.cambiarTamanoPaginaTrabajadores('20');assert.equal(c.window.paginaTrabajadores,1);assert.equal(doc.querySelectorAll('#tabla-trabajadores-body tr').length,20);
+});
+test('editar conserva página; filtrar vuelve al inicio y eliminar ajusta la última página',()=>{
+    const {c,doc}=contexto();agregarPaginador(doc);
+    c.trabajadoresGlobal=Array.from({length:21},(_,i)=>({id:i+1,nombre:`Persona ${i+1}`,activo:true}));
+    c.aplicarFiltrosTrabajadores();c.cambiarPaginaTrabajadores(2);assert.equal(c.window.paginaTrabajadores,3);
+    c.trabajadoresGlobal[20].nombre='Editada';c.aplicarFiltrosTrabajadores();assert.equal(c.window.paginaTrabajadores,3);
+    assert(doc.getElementById('tabla-trabajadores-body').textContent.includes('Editada'));
+    c.trabajadoresGlobal.pop();c.aplicarFiltrosTrabajadores();assert.equal(c.window.paginaTrabajadores,2);
+    doc.getElementById('busqueda-trabajadores').value='Persona 1';c.aplicarFiltrosTrabajadores();assert.equal(c.window.paginaTrabajadores,1);
+    doc.getElementById('busqueda-trabajadores').value='Sin resultado';c.aplicarFiltrosTrabajadores();assert.equal(doc.getElementById('personal-resultados').textContent,'0 colaboradores encontrados');
+    assert(doc.getElementById('personal-anterior').disabled && doc.getElementById('personal-siguiente').disabled);
+});

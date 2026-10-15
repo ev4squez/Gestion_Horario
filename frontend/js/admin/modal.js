@@ -111,7 +111,7 @@ function mostrarVistaTrabajadores() {
 
 }
 
-function mostrarVistaPlanificacion() {
+function mostrarVistaPlanificacion(seleccionarCargos = true) {
 
     // La planificación ahora exige sesión: el backend rechaza GET/POST sin
     // token, así que el cliente también bloquea el render hasta loguearse.
@@ -131,6 +131,10 @@ function mostrarVistaPlanificacion() {
     mostrarPanelDerecho()
 
     actualizarVistaPlanificacion()
+
+    if(seleccionarCargos && typeof abrirSelectorCargosPlanificacion === "function"){
+        abrirSelectorCargosPlanificacion()
+    }
 
 }
 
@@ -481,6 +485,21 @@ function limpiarFiltrosTrabajadores() {
 
 }
 
+function cambiarPaginaTrabajadores(desplazamiento){
+    window.paginaTrabajadores = (window.paginaTrabajadores || 1) + desplazamiento
+    aplicarFiltrosTrabajadores()
+    const tabla = document.querySelector('.personal-table-scroll')
+    if(tabla) tabla.scrollTop = 0
+}
+
+function cambiarTamanoPaginaTrabajadores(valor){
+    window.tamanoPaginaTrabajadores = [10,20,50].includes(Number(valor)) ? Number(valor) : 10
+    window.paginaTrabajadores = 1
+    aplicarFiltrosTrabajadores()
+    const tabla = document.querySelector('.personal-table-scroll')
+    if(tabla) tabla.scrollTop = 0
+}
+
 function renderizarTrabajadoresCRUD(
     lista = filtrarTrabajadoresCRUD(trabajadoresGlobal)
 ) {
@@ -497,6 +516,29 @@ function renderizarTrabajadoresCRUD(
         return
     }
 
+    const filtros = JSON.stringify(['busqueda-trabajadores','filtro-estado','filtro-cargo','filtro-responsable','filtro-area','filtro-ceco']
+        .map(id=>document.getElementById(id)?.value || ''))
+    if(window.filtrosPaginaTrabajadores !== filtros){
+        window.paginaTrabajadores = 1
+        window.filtrosPaginaTrabajadores = filtros
+    }
+    const tamano = window.tamanoPaginaTrabajadores || 10
+    const paginas = Math.max(1,Math.ceil(lista.length / tamano))
+    const pagina = Math.max(1,Math.min(paginas,window.paginaTrabajadores || 1))
+    window.paginaTrabajadores = pagina
+    const inicio = (pagina-1)*tamano
+    const visibles = lista.slice(inicio,inicio+tamano)
+    const resumen = document.getElementById('personal-resultados')
+    if(resumen) resumen.textContent = lista.length ? `Mostrando ${inicio+1}–${inicio+visibles.length} de ${lista.length} colaboradores` : '0 colaboradores encontrados'
+    const indicador = document.getElementById('personal-pagina')
+    if(indicador) indicador.textContent = `Página ${pagina} de ${paginas}`
+    const anterior = document.getElementById('personal-anterior')
+    const siguiente = document.getElementById('personal-siguiente')
+    if(anterior) anterior.disabled = pagina<=1
+    if(siguiente) siguiente.disabled = pagina>=paginas
+    const selector = document.getElementById('personal-por-pagina')
+    if(selector) selector.value = String(tamano)
+
     if(lista.length === 0){
         tbody.innerHTML = `
             <tr>
@@ -510,13 +552,14 @@ function renderizarTrabajadoresCRUD(
 
     let html = ""
 
-    lista.forEach(t => {
+    visibles.forEach(t => {
 
         html += `
             <tr class="hover:bg-slate-50 transition">
 
                 <td class="p-4 font-semibold">
                     ${escaparHTML(t.nombre)}
+                    <small class="personal-cargo">${escaparHTML(t.cargo || "Sin cargo")}</small>
                 </td>
 
                 <td class="p-4">

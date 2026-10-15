@@ -374,6 +374,7 @@ function editarReglaCobertura(id){
     document.getElementById("cobertura-minimo-fin").value =
         regla.minimo_fin ?? regla.minimo_personas
     document.getElementById("cobertura-activo").checked = !!regla.activo
+    abrirFormularioCobertura()
 
 }
 
@@ -458,6 +459,26 @@ async function eliminarReglaCobertura(id){
 
 }
 
+function abrirFormularioCobertura(nueva = false){
+    if(nueva) limpiarFormularioCobertura()
+    const formulario=document.getElementById('cobertura-formulario')
+    if(formulario){formulario.open=true;formulario.scrollIntoView?.({block:'nearest'})}
+    document.getElementById('cobertura-tipo')?.focus()
+}
+
+function cambiarPaginaCobertura(delta){
+    window.paginaCobertura=(window.paginaCobertura || 1)+delta
+    renderizarReglasCobertura()
+    const tabla=document.querySelector('.coverage-table-scroll')
+    if(tabla) tabla.scrollTop=0
+}
+
+function cambiarTamanoPaginaCobertura(valor){
+    window.tamanoPaginaCobertura=[10,20,50].includes(Number(valor)) ? Number(valor) : 10
+    window.paginaCobertura=1
+    renderizarReglasCobertura()
+}
+
 function renderizarReglasCobertura(){
 
     const tbody =
@@ -465,11 +486,35 @@ function renderizarReglasCobertura(){
 
     if(!tbody){ return }
 
-    if(coberturaConfigGlobal.length === 0){
+    const texto=normalizarTexto(document.getElementById('buscar-reglas-cobertura')?.value)
+    const estado=document.getElementById('estado-reglas-cobertura')?.value || ''
+    const dia=document.getElementById('dia-reglas-cobertura')?.value || ''
+    const firma=JSON.stringify([texto,estado,dia])
+    if(window.filtrosPaginaCobertura!==firma){window.paginaCobertura=1;window.filtrosPaginaCobertura=firma}
+    const filtradas=coberturaConfigGlobal.filter(r=>(!estado || (estado==='activas' ? !!r.activo : !r.activo)) &&
+        (!dia || String(r.dia_semana)===dia) && (!texto || normalizarTexto([r.valor,r.tipo,NOMBRES_DIAS_COBERTURA[r.dia_semana],r.hora_inicio,r.hora_fin].join(' ')).includes(texto)))
+        .sort((a,b)=>String(a.valor).localeCompare(String(b.valor),'es') || String(a.tipo).localeCompare(String(b.tipo)) || a.dia_semana-b.dia_semana || String(a.hora_inicio).localeCompare(String(b.hora_inicio)) || a.id-b.id)
+    const tamano=window.tamanoPaginaCobertura || 10
+    const paginas=Math.max(1,Math.ceil(filtradas.length/tamano))
+    const pagina=Math.max(1,Math.min(paginas,window.paginaCobertura || 1))
+    window.paginaCobertura=pagina
+    const inicio=(pagina-1)*tamano
+    const visibles=filtradas.slice(inicio,inicio+tamano)
+    const resumen=document.getElementById('cobertura-resultados')
+    if(resumen) resumen.textContent=filtradas.length ? `Mostrando ${inicio+1}–${inicio+visibles.length} de ${filtradas.length} regla${filtradas.length===1 ? "" : "s"}` : '0 reglas encontradas'
+    const indicador=document.getElementById('cobertura-pagina')
+    if(indicador) indicador.textContent=`Página ${pagina} de ${paginas}`
+    const anterior=document.getElementById('cobertura-anterior'), siguiente=document.getElementById('cobertura-siguiente')
+    if(anterior) anterior.disabled=pagina<=1
+    if(siguiente) siguiente.disabled=pagina>=paginas
+    const selector=document.getElementById('cobertura-por-pagina')
+    if(selector) selector.value=String(tamano)
+
+    if(filtradas.length === 0){
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="p-5 text-center text-slate-400">
-                    Sin reglas configuradas
+                    ${coberturaConfigGlobal.length ? "Sin coincidencias" : "Sin reglas configuradas"}
                 </td>
             </tr>
         `
@@ -486,7 +531,7 @@ function renderizarReglasCobertura(){
     }
 
     const grupos = new Map()
-    coberturaConfigGlobal.forEach(regla => {
+    visibles.forEach(regla => {
         const clave = `${regla.tipo}::${regla.valor}`
         if(!grupos.has(clave)){
             grupos.set(clave, {
@@ -510,6 +555,7 @@ function renderizarReglasCobertura(){
     gruposOrdenados.forEach(grupo => {
         const etiqueta = etiquetaGrupoRegla(grupo)
         const total = grupo.reglas.length
+        const totalGrupo = filtradas.filter(r=>r.tipo===grupo.tipo && r.valor===grupo.valor).length
         const colapsado = window.reglasColapsadas.has(grupo.clave)
 
         html += `
@@ -522,7 +568,7 @@ function renderizarReglasCobertura(){
                         <span class="flex items-center gap-2 min-w-0">
                             <span class="material-symbols-outlined text-slate-500 text-lg transition-transform" data-grupo-caret>${colapsado ? "chevron_right" : "expand_more"}</span>
                             <span class="font-black text-slate-800 truncate">${escaparHTML(etiqueta)}</span>
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-slate-200 text-slate-700">${total} regla${total === 1 ? "" : "s"}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-slate-200 text-slate-700">${total<totalGrupo ? `${total} de ${totalGrupo}` : total} regla${totalGrupo === 1 ? "" : "s"}</span>
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-blue-100 text-blue-700">${escaparHTML(grupo.tipo)}</span>
                         </span>
                         <span class="text-[11px] text-slate-500">Click para ${colapsado ? "expandir" : "colapsar"}</span>
@@ -589,6 +635,7 @@ function renderizarReglasCobertura(){
             // Re-render inmediato del grupo: barato y mantiene el estado del
             // resto del DOM (foco, scroll) sin perderlo.
             renderizarReglasCobertura()
+            Array.from(tbody.querySelectorAll("[data-grupo-toggle]")).find(b=>b.dataset.grupoToggle===clave)?.focus()
         })
     }
 
