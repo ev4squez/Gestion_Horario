@@ -136,6 +136,14 @@ function mostrarVistaPlanificacion(seleccionarCargos = true) {
         return
     }
 
+    // La selección se confirma antes de mostrar la grilla. Ni cancelar el
+    // diálogo ni volver desde otra vista deben permitir planificar sin cargos.
+    if(typeof abrirSelectorCargosPlanificacion === "function" &&
+        (seleccionarCargos || !window.cargosSeleccionados?.length)){
+        abrirSelectorCargosPlanificacion(true)
+        return
+    }
+
     marcarMenuActivo("menu-planificacion")
 
     ocultarTodasLasVistas()
@@ -147,10 +155,6 @@ function mostrarVistaPlanificacion(seleccionarCargos = true) {
     mostrarPanelDerecho()
 
     actualizarVistaPlanificacion()
-
-    if(seleccionarCargos && typeof abrirSelectorCargosPlanificacion === "function"){
-        abrirSelectorCargosPlanificacion()
-    }
 
 }
 

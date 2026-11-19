@@ -560,7 +560,7 @@ function actualizarEtiquetaCargos(){
     const n = window.cargosSeleccionados.length
 
     if(n === 0){
-        label.textContent = "Todos los cargos"
+        label.textContent = "Selecciona cargos"
     }else if(n === 1){
         label.textContent = window.cargosSeleccionados[0]
     }else{
@@ -571,6 +571,11 @@ function actualizarEtiquetaCargos(){
 
 // Muestra/oculta el panel.
 function toggleDropdownCargos(){
+
+    if(typeof abrirSelectorCargosPlanificacion === "function"){
+        abrirSelectorCargosPlanificacion(!window.cargosSeleccionados?.length)
+        return
+    }
 
     const panel =
         document.getElementById(
@@ -679,7 +684,7 @@ function formatearDuracionTurno(turno){
 
     const inicio = parseInt(match[1]) + parseInt(match[2]) / 60
     let fin = parseInt(match[3]) + parseInt(match[4]) / 60
-    if(fin < inicio){ fin += 24 }
+    if(fin <= inicio){ fin += 24 }
 
     const totalMinutos = Math.round((fin - inicio) * 60)
     const horas = Math.floor(totalMinutos / 60)
@@ -808,6 +813,28 @@ function renderizarTrabajadores(trabajadores){
     trabajadores = (trabajadores || []).filter(t => t.activo !== false)
     document.getElementById("total-trabajadores").innerText = trabajadores.length
     const contenedor = document.getElementById("contenedor-responsables")
+    // El guardado y la carga de feriados repintan la grilla. Conservar la
+    // posición por semana, no por índice (las semanas cambian entre meses).
+    const desplazamientos = new Map(
+        [...contenedor.querySelectorAll(".schedule-scroll")].map(el =>
+            [el.dataset.semana, {top: el.scrollTop, left: el.scrollLeft}]
+        )
+    )
+    const exteriores = []
+    for(let el = contenedor; el; el = el.parentElement){
+        exteriores.push({el, top: el.scrollTop, left: el.scrollLeft})
+    }
+    const activo = document.activeElement
+    const edicion = activo?.matches(".turno-input") && contenedor.contains(activo)
+        ? {
+            trabajadorId: activo.closest(".fila-trabajador").dataset.trabajadorId,
+            fecha: activo.dataset.fecha,
+            valor: activo.value,
+            inicio: activo.selectionStart,
+            fin: activo.selectionEnd,
+            direccion: activo.selectionDirection
+        }
+        : null
     const semanas = generarSemanas(mesActual, anioActual)
     const alertas = calcularTodasAlertas(trabajadores)
     contenedor.innerHTML = semanas.map((semana, index) => {
@@ -821,7 +848,7 @@ function renderizarTrabajadores(trabajadores){
                 <h2>Semana ${index + 1}</h2>
                 <p>${formatearFecha(semana.inicio)} al ${formatearFecha(semana.fin)}</p>
             </div>
-            <div class="schedule-scroll" tabindex="0" role="region" aria-label="Turnos de la semana ${index + 1}">
+            <div class="schedule-scroll" data-semana="${resumenFechaISO(semana.inicio)}" tabindex="0" role="region" aria-label="Turnos de la semana ${index + 1}">
                 <table class="schedule-table">
                     <caption class="sr-only">Planificación semanal de colaboradores. Las horas descuentan colación.</caption>
                     <thead><tr><th scope="col" class="schedule-name">Colaborador</th>
@@ -870,6 +897,31 @@ function renderizarTrabajadores(trabajadores){
         </section>`
     }).join("")
     document.querySelectorAll(".turno-input").forEach(actualizarColor)
+    contenedor.querySelectorAll(".schedule-scroll").forEach(el => {
+        const posicion = desplazamientos.get(el.dataset.semana)
+        if(posicion){
+            el.scrollTop = posicion.top
+            el.scrollLeft = posicion.left
+        }
+    })
+    // Si ya se está cargando otra celda mientras llega la respuesta, no
+    // perder su borrador ni mover el foco a la celda que terminó de guardar.
+    if(edicion){
+        const input = [...contenedor.querySelectorAll(".turno-input")].find(el =>
+            el.dataset.fecha === edicion.fecha &&
+            el.closest(".fila-trabajador").dataset.trabajadorId === edicion.trabajadorId
+        )
+        if(input){
+            input.value = edicion.valor
+            actualizarColor(input)
+            input.focus({preventScroll: true})
+            input.setSelectionRange(edicion.inicio, edicion.fin, edicion.direccion)
+        }
+    }
+    exteriores.forEach(({el, top, left}) => {
+        el.scrollTop = top
+        el.scrollLeft = left
+    })
 }
 
 // =====================================================
@@ -1219,6 +1271,15 @@ async function guardarTurno(input){
 
         return
 
+    }
+
+    // Una celda anterior o una selección vacía no deben permitir guardar
+    // turnos sin indicar explícitamente los cargos que se van a planificar.
+    if(!window.cargosSeleccionados?.includes(trabajador.cargo)){
+        if(typeof abrirSelectorCargosPlanificacion === "function"){
+            abrirSelectorCargosPlanificacion(true)
+        }
+        return
     }
 
     // =====================================

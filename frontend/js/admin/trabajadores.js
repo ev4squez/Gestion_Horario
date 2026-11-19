@@ -254,6 +254,42 @@ function abrirModalTrabajador(){
 // NUEVO TRABAJADOR
 // =====================================================
 
+function formatearRutTrabajador(input){
+
+    const original = input.value
+    const limpio = original.replace(/[.\s-]/g, "").toUpperCase()
+
+    // Solo ajustar separadores y K: no eliminar letras inválidas ni
+    // truncar números, porque eso cambiaría el identificador ingresado.
+    if(!/^(?:\d{1,9}|\d{1,8}K)?$/.test(limpio)) return original
+
+    const cuerpo = limpio.slice(0, -1)
+    const formateado = limpio.length > 1
+        ? `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${limpio.slice(-1)}`
+        : limpio
+
+    if(formateado !== original){
+        const posicion = indice => {
+            const cantidad = original.slice(0, indice).replace(/[.\s-]/g, "").length
+            let restantes = cantidad
+            let nueva = 0
+            while(nueva < formateado.length && restantes > 0){
+                if(/[\dK]/.test(formateado[nueva])) restantes--
+                nueva++
+            }
+            return nueva
+        }
+        const inicio = posicion(input.selectionStart)
+        const fin = posicion(input.selectionEnd)
+        const direccion = input.selectionDirection
+        input.value = formateado
+        input.setSelectionRange(inicio, fin, direccion)
+    }
+
+    return formateado
+
+}
+
 function nuevoTrabajador(){
 
     document.getElementById(
@@ -318,6 +354,8 @@ function editarTrabajador(id){
     document.getElementById("trabajador-rut").value =
         trabajador.rut || ""
 
+    formatearRutTrabajador(document.getElementById("trabajador-rut"))
+
     document.getElementById("trabajador-nombre").value =
         trabajador.nombre || ""
 
@@ -363,7 +401,7 @@ async function guardarTrabajador(){
         document.getElementById("trabajador-id").value
 
     const rut =
-        document.getElementById("trabajador-rut").value.trim()
+        formatearRutTrabajador(document.getElementById("trabajador-rut")).trim()
 
     const nombre =
         document.getElementById("trabajador-nombre").value.trim()

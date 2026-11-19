@@ -314,6 +314,12 @@ function poblarValoresCobertura(){
 
     if(!tipo || !valor){ return }
 
+    // Refrescar las opciones no debe borrar el grupo que se está cargando.
+    // Al cambiar de tipo, en cambio, la selección pertenece a otra lista.
+    const valorActual = valor.dataset.tipoCobertura === tipo.value
+        ? valor.value
+        : ""
+
     const campo =
         tipo.value === "area"
             ? "area"
@@ -338,12 +344,18 @@ function poblarValoresCobertura(){
         `
     })
 
+    if(valores.includes(valorActual)){
+        valor.value = valorActual
+    }
+    valor.dataset.tipoCobertura = tipo.value
+
 }
 
 function limpiarFormularioCobertura(){
 
     document.getElementById("cobertura-id").value = ""
     document.getElementById("cobertura-tipo").value = "ceco"
+    document.getElementById("cobertura-valor").value = ""
     document.getElementById("cobertura-dia").value = "0"
     document.getElementById("cobertura-inicio").value = "09:00"
     document.getElementById("cobertura-fin").value = "05:00"
@@ -421,7 +433,9 @@ async function guardarReglaCobertura(){
     }
 
     coberturaConfigGlobal = await obtenerConfiguracionCobertura()
-    limpiarFormularioCobertura()
+    // Terminar la edición, pero conservar la configuración para cargar
+    // las siguientes reglas sin volver a buscar el área, CECO o cargo.
+    document.getElementById("cobertura-id").value = ""
     renderizarCobertura()
 
 }

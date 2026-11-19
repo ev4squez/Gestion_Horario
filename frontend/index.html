@@ -654,7 +654,7 @@
               </span>
               <button type="button" id="filtro-cargo-btn" onclick="toggleDropdownCargos()"
                 class="filter-select w-full sm:w-auto min-w-[260px] pr-10 text-left">
-                <span id="filtro-cargo-label">Todos los cargos</span>
+                <span id="filtro-cargo-label">Selecciona cargos</span>
                 <span
                   class="material-symbols-outlined text-slate-400 text-lg absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                   expand_more
@@ -1108,14 +1108,23 @@
                         <div>
                           <label class="block text-sm font-semibold mb-2 text-slate-700">Hora de inicio</label>
                           <input type="time" id="turno-frecuente-inicio" value="09:00"
+                            oninput="actualizarDuracionTurnoFrecuente()" onchange="actualizarDuracionTurnoFrecuente()"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                         </div>
                         <div>
                           <label class="block text-sm font-semibold mb-2 text-slate-700">Hora de término</label>
                           <input type="time" id="turno-frecuente-fin" value="18:30"
+                            oninput="actualizarDuracionTurnoFrecuente()" onchange="actualizarDuracionTurnoFrecuente()"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
                         </div>
                       </div>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                      <span class="block text-sm font-semibold text-slate-700">Horas del turno</span>
+                      <output id="turno-frecuente-duracion" for="turno-frecuente-inicio turno-frecuente-fin"
+                        class="block text-lg font-bold text-blue-700" aria-live="polite"></output>
+                      <small class="text-slate-500">Duración total, sin descontar colación.</small>
                     </div>
 
                     <button onclick="guardarTurnoFrecuente()"
@@ -1132,6 +1141,7 @@
                           <tr>
                             <th class="p-4 text-left">CECO</th>
                             <th class="p-4 text-center">Turno frecuente</th>
+                            <th class="p-4 text-center" title="Duración total sin descontar colación">Horas del turno</th>
                             <th class="p-4 text-center">Acciones</th>
                           </tr>
                         </thead>
@@ -1875,6 +1885,7 @@
           </label>
 
           <input type="text" id="trabajador-rut" placeholder="12.345.678-9"
+            oninput="formatearRutTrabajador(this)" onblur="formatearRutTrabajador(this)"
             class="w-full rounded-2xl border border-slate-300 px-5 py-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
         </div>
 

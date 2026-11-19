@@ -16,10 +16,13 @@ function contexto(){
     const fila=nombre=>[...dom.window.document.querySelectorAll('.cargo-picker-option')].find(e=>e.textContent.includes(nombre));
     return {c,doc:dom.window.document,dom,change,enviar,fila,aperturas:()=>apertura};
 }
-test('selecciona un cargo desde todos, cuenta solo activos y recuerda selección',()=>{
+test('exige seleccionar cargos antes de continuar, cuenta solo activos y recuerda selección',()=>{
     const {c,doc,change,enviar,fila,aperturas}=contexto();c.abrirSelectorCargosPlanificacion();
     assert.equal(doc.querySelectorAll('.cargo-picker').length,1);c.abrirSelectorCargosPlanificacion();assert.equal(doc.querySelectorAll('.cargo-picker').length,1);
     assert(fila('Técnico').textContent.includes('2 activos'));
+    assert.equal(doc.querySelector('[data-todos]').checked,false);
+    assert.equal(doc.querySelector('[type=submit]').disabled,true);
+    enviar();assert.equal(aperturas(),0);
     const input=fila('Técnico').querySelector('input');input.checked=true;change(input);enviar();
     assert.equal(c.window.cargosSeleccionados.length,1);assert.equal(c.window.cargosSeleccionados[0],'Técnico');assert.equal(aperturas(),1);
     assert.equal(doc.getElementById('busqueda-planificacion').value,'');
@@ -37,9 +40,74 @@ test('preferencias separadas por empresa y cargos eliminados no se convierten en
     const {c,doc}=contexto();c.window.cargosSeleccionados=['Eliminado'];c.guardarPreferenciaCargos();c.abrirSelectorCargosPlanificacion();
     assert(doc.querySelector('[type=submit]').disabled);assert.equal(doc.querySelector('[data-todos]').checked,false);
     doc.querySelector('.cargo-picker-close').click();c.guardarEmpresa({id:2});c.window.cargosSeleccionados=[];c.abrirSelectorCargosPlanificacion();
-    assert(doc.querySelector('[data-todos]').checked);
+    assert.equal(doc.querySelector('[data-todos]').checked,false);
+    assert.equal(doc.querySelector('[type=submit]').disabled,true);
 });
-test('sin personal activo permite ver todos y no ofrece cargos inactivos',()=>{
-    const {c,doc,enviar}=contexto();c.trabajadoresGlobal=[{cargo:'Técnico',activo:false}];c.abrirSelectorCargosPlanificacion();
-    assert.equal(doc.querySelectorAll('.cargo-picker-option').length,0);assert.equal(doc.querySelector('[type=submit]').disabled,false);enviar();assert.equal(c.window.cargosSeleccionados.length,0);
+test('sin cargos con personal activo no permite continuar ni ofrece cargos inactivos',()=>{
+    const {c,doc,enviar,aperturas}=contexto();c.trabajadoresGlobal=[{cargo:'Técnico',activo:false},{cargo:'',activo:true}];c.abrirSelectorCargosPlanificacion();
+    assert.equal(doc.querySelectorAll('.cargo-picker-option').length,0);assert.equal(doc.querySelector('[type=submit]').disabled,true);enviar();assert.equal(aperturas(),0);
+});
+
+test('Todos requiere una acción explícita y guarda los cargos concretos elegidos',()=>{
+    const {c,doc,change,enviar,aperturas}=contexto();c.abrirSelectorCargosPlanificacion();
+    const todos=doc.querySelector('[data-todos]');todos.checked=true;change(todos);enviar();
+    assert.equal(aperturas(),1);
+    assert.deepEqual(Array.from(c.window.cargosSeleccionados).sort(),['Ingeniero','Técnico']);
+});
+
+test('entrar a planificación no revela ni renderiza la vista antes de confirmar cargos',()=>{
+    const {c,doc,change,enviar,fila}=contexto();
+    for(const id of ['vista-planificacion','vista-trabajadores','right-panel','main-content']){
+        const el=doc.createElement('div');el.id=id;el.classList.add('hidden');doc.body.appendChild(el);
+    }
+    vm.runInContext(fs.readFileSync('frontend/js/admin/modal.js','utf8'),c);
+    c.adminAutorizado=true;c.obtenerToken=()=> 'sesion-de-prueba';
+    let renders=0;c.actualizarVistaPlanificacion=()=>{renders++};
+    c.mostrarVistaPlanificacion();
+    assert.equal(renders,0);assert(doc.getElementById('vista-planificacion').classList.contains('hidden'));
+    const input=fila('Técnico').querySelector('input');input.checked=true;change(input);enviar();
+    assert.equal(renders,1);assert.equal(doc.getElementById('vista-planificacion').classList.contains('hidden'),false);
+});
+
+test('cancelar o pulsar Escape en la selección obligatoria sale a Colaboradores sin abrir planificación',()=>{
+    for(const escape of [false,true]){
+        const {c,doc,dom,aperturas}=contexto();let salidas=0;
+        c.mostrarVistaTrabajadores=()=>{salidas++};
+        c.abrirSelectorCargosPlanificacion(true);
+        if(escape) doc.querySelector('dialog').dispatchEvent(new dom.window.Event('cancel',{cancelable:true}));
+        else doc.querySelector('.cargo-picker-cancel').click();
+        assert.equal(aperturas(),0);assert.equal(salidas,1);assert.equal(doc.querySelector('dialog'),null);
+    }
+});
+
+test('no guarda turnos sin seleccionar cargos ni para un cargo fuera de la selección',async()=>{
+    const {c,doc}=contexto();
+    vm.runInContext(fs.readFileSync('frontend/js/app.js','utf8'),c);
+    vm.runInContext('trabajadoresGlobal=[{id:7,cargo:"Técnico",ceco:"TI"}]',c);
+    const fila=doc.createElement('div');fila.className='fila-trabajador';fila.dataset.trabajadorId='7';
+    const input=doc.createElement('input');input.value='09:00 - 17:30';input.dataset.fecha='2026-11-19';fila.appendChild(input);doc.body.appendChild(fila);
+    c.adminAutorizado=true;c.obtenerToken=()=> 'sesion-de-prueba';
+    c.console={log(){}};c.colacionPorCeco=()=>0.5;c.calcularHorasSemana=()=>8;
+    let peticiones=0,solicitudes=0;
+    c.guardarPlanificacion=async()=>{peticiones++;return {ok:false,status:400,json:async()=>({})}};
+    c.alert=()=>{};
+    c.abrirSelectorCargosPlanificacion=obligatorio=>{assert.equal(obligatorio,true);solicitudes++};
+    for(const cargos of [[],['Ingeniero']]){
+        c.window.cargosSeleccionados=cargos;
+        await c.guardarTurno(input);
+    }
+    assert.equal(peticiones,0);assert.equal(solicitudes,2);
+    c.window.cargosSeleccionados=['Técnico'];
+    await c.guardarTurno(input);
+    assert.equal(peticiones,1);
+});
+
+test('confirmar retira el diálogo inmediatamente aunque el evento close sea diferido',()=>{
+    const {c,doc,dom,fila,change,enviar}=contexto();
+    dom.window.HTMLDialogElement.prototype.close=function(){this.open=false};
+    c.abrirSelectorCargosPlanificacion();
+    const input=fila('Técnico').querySelector('input');input.checked=true;change(input);enviar();
+    assert.equal(doc.querySelector('dialog'),null);
+    c.abrirSelectorCargosPlanificacion(true);
+    assert.equal(doc.querySelector('dialog').open,true);
 });

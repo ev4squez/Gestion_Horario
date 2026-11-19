@@ -308,13 +308,14 @@ class TurnosFrecuentesAgrupadosTest(unittest.TestCase):
     JS_SOURCE = (
         ROOT / "frontend/js/admin/turnos-frecuentes.js"
     ).read_text(encoding="utf-8")
+    APP_SOURCE = (ROOT / "frontend/js/app.js").read_text(encoding="utf-8")
 
     def _invocar(self, turnos):
         import subprocess
         import textwrap
 
         script = textwrap.dedent(f"""
-            const {{ JSDOM }} = require('/tmp/hermes-jsdom-stub/node_modules/jsdom')
+            const {{ JSDOM }} = require(process.env.JSDOM_PATH || 'jsdom')
             const dom = new JSDOM('<!DOCTYPE html><html><body>'
                 + '<table><tbody id="tabla-turnos-frecuentes-body"></tbody></table>'
                 + '</body></html>')
@@ -327,11 +328,15 @@ class TurnosFrecuentesAgrupadosTest(unittest.TestCase):
             const context = {{
                 document, window,
                 turnosFrecuentesGlobal,
+                datosPrueba: turnosFrecuentesGlobal,
                 escaparHTML,
                 eliminarTurnoFrecuenteCRUD: function(){{}}
             }}
             const vm = require('vm')
             vm.createContext(context)
+            // Cargar el formateador compartido igual que en la aplicación.
+            vm.runInContext({self.APP_SOURCE!r}, context)
+            vm.runInContext('turnosFrecuentesGlobal=datosPrueba', context)
             vm.runInContext({self.JS_SOURCE!r}, context)
             // El archivo sólo define funciones; las invocamos manualmente
             // para que el tbody se rellene.

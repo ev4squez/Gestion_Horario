@@ -32,7 +32,22 @@ function poblarCecosTurnosFrecuentes(){
 
 }
 
+function actualizarDuracionTurnoFrecuente(){
+
+    const indicador = document.getElementById("turno-frecuente-duracion")
+    if(!indicador){ return }
+
+    const inicio = document.getElementById("turno-frecuente-inicio")?.value
+    const fin = document.getElementById("turno-frecuente-fin")?.value
+    indicador.textContent = inicio && fin
+        ? formatearDuracionTurno(`${inicio} - ${fin}`)
+        : "Completa ambos horarios"
+
+}
+
 function renderizarTurnosFrecuentes(){
+
+    actualizarDuracionTurnoFrecuente()
 
     const tbody = document.getElementById("tabla-turnos-frecuentes-body")
     if(!tbody){ return }
@@ -44,7 +59,7 @@ function renderizarTurnosFrecuentes(){
     if(turnos.length === 0){
         tbody.innerHTML = `
             <tr>
-                <td colspan="3" class="p-6 text-center text-slate-400">
+                <td colspan="4" class="p-6 text-center text-slate-400">
                     Aún no hay turnos frecuentes configurados.
                 </td>
             </tr>
@@ -92,7 +107,7 @@ function renderizarTurnosFrecuentes(){
 
         html += `
             <tr class="bg-slate-50/80 border-y border-slate-200">
-                <td colspan="3" class="p-0">
+                <td colspan="4" class="p-0">
                     <button type="button"
                         data-grupo-ceco-toggle="${escaparHTML(grupo.clave)}"
                         aria-expanded="${colapsado ? "false" : "true"}"
@@ -121,6 +136,9 @@ function renderizarTurnosFrecuentes(){
                     </td>
                     <td class="p-4 text-center font-mono font-semibold text-slate-700">
                         ${escaparHTML(turno.turno)}
+                    </td>
+                    <td class="p-4 text-center font-semibold text-slate-700 whitespace-nowrap">
+                        ${escaparHTML(formatearDuracionTurno(turno.turno))}
                     </td>
                     <td class="p-4 text-center">
                         <button type="button" onclick="eliminarTurnoFrecuenteCRUD(${turno.id})"

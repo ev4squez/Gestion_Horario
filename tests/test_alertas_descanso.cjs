@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 function contexto(turnos){
-    const elementos = {'total-trabajadores': {}, 'contenedor-responsables': {}};
+    const elementos = {'total-trabajadores': {}, 'contenedor-responsables': {querySelectorAll: () => []}};
     const c = vm.createContext({
         window: {},
         document: {addEventListener(){}, getElementById: id => elementos[id], querySelectorAll: () => []},
