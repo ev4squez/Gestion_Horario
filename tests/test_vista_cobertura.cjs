@@ -116,3 +116,14 @@ test('un guardado rechazado no borra la edición ni las selecciones',async()=>{
     assert.equal(doc.getElementById('cobertura-valor').value,'TI');
     assert.equal(mensajes.length,1);
 });
+
+test('Cobertura Operativa solo configura reglas y colaciones, sin avisos ni cálculo de alertas',()=>{
+    const {c,doc}=contexto();
+    assert.equal(doc.querySelector('#vista-cobertura #resultado-cobertura'),null);
+    assert.equal(doc.querySelector('#vista-cobertura #badge-cobertura'),null);
+    c.calcularCobertura=()=>{throw new Error('La configuración no debe calcular alertas')};
+    c.renderizarColacion=()=>{};
+    c.renderizarCobertura();
+    assert(doc.getElementById('tabla-cobertura-body').textContent.includes('TI'));
+    assert.equal(doc.querySelector('#vista-cobertura [onclick="mostrarVistaAlertas()"]'),null);
+});

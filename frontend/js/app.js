@@ -153,11 +153,13 @@ function actualizarVistaPlanificacion(){
         renderizarCobertura()
     }
 
+    if(typeof renderizarAlertasVista === "function"){
+        renderizarAlertasVista()
+    }
+
 }
 
-// Vista Alertas (full-page). Reusa `calcularTodasAlertas` de resumen.js para
-// obtener todos los alertas (cobertura + descanso + horas) y los pinta en
-// `#contenedor-alertas-vista`. Soporta un filtro rápido por `kind`.
+// Presentación compartida del detalle del dashboard de alertas.
 function iconoVistaAlertas(nombre, clase = ""){
     const trazos = {
         error:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/>',
@@ -170,67 +172,6 @@ function iconoVistaAlertas(nombre, clase = ""){
     return `<svg class="alerts-svg ${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${trazos[nombre] || trazos.info}</svg>`
 }
 
-function renderizarAlertasVista(){
-    const contenedor = document.getElementById("contenedor-alertas-vista")
-    const badge = document.getElementById("badge-alertas-vista")
-    if(!contenedor || !badge) return
-    const trabajadores = trabajadoresPlanificacionVisibles().filter(t=>t.activo !== false)
-    const todas = calcularTodasAlertas(trabajadores)
-    const filtro = document.querySelector(".filtro-alerta.bg-slate-900")?.dataset.filtroAlerta || "todos"
-    const prioridad = document.getElementById("prioridad-alertas")?.value || "todos"
-    const busqueda = normalizarTexto(document.getElementById("busqueda-alertas")?.value)
-    const categorias = {todos:"Todas",cobertura:"Cobertura",descanso:"Descanso",horas:"Horas"}
-    Object.entries(categorias).forEach(([key,label])=>{
-        const boton = document.querySelector(`.filtro-alerta[data-filtro-alerta="${key}"]`)
-        const n = key === "todos" ? todas.length : todas.filter(a=>a.kind===key).length
-        if(boton){
-            boton.innerHTML = `${label}<span class="alerts-tab-count">${n}</span>`
-            boton.setAttribute("aria-pressed",String(key===filtro))
-        }
-    })
-    const contexto = document.getElementById("alertas-contexto")
-    const periodo = new Date(anioActual,mesActual,1).toLocaleDateString("es-CL",{month:"long",year:"numeric"})
-    if(contexto) contexto.textContent = `${periodo} · ${window.cargosSeleccionados?.length ? window.cargosSeleccionados.join(", ") : "Todos los cargos"}${window.busquedaPlanificacion ? ` · Filtro de planificación: ${window.busquedaPlanificacion}` : ""}`
-    const criticas = todas.filter(a=>a.tipo==="danger").length
-    const advertencias = todas.filter(a=>a.tipo==="warning").length
-    const estado = document.getElementById("alertas-estado")
-    if(estado){
-        estado.classList.toggle("alerts-status-clear",!todas.length)
-        estado.innerHTML = `${iconoVistaAlertas(criticas ? "error" : todas.length ? "info" : "check")}
-            <div><strong>${criticas ? `${criticas} caso${criticas===1 ? " crítico requiere" : "s críticos requieren"} atención` : todas.length ? "Revisa los ajustes pendientes" : "Sin alertas detectadas"}</strong>
-            <p>${todas.length ? `${advertencias} advertencias · ${todas.length-criticas-advertencias} informativas. Revisa primero la cobertura y el descanso.` : "No se detectaron conflictos para el período y los filtros seleccionados."}</p></div>`
-    }
-    const orden = {danger:0,warning:1,info:2}
-    const filtradas = todas.filter(a=>(filtro==="todos" || a.kind===filtro) && (prioridad==="todos" || a.tipo===prioridad) &&
-        (!busqueda || normalizarTexto([a.trabajador,a.responsable,a.titulo,a.mensaje,a.detalle,a.fecha,a.fecha1,a.fecha2,a.kind,a.semana ? `Semana ${a.semana}` : ""].join(" ")).includes(busqueda)))
-        .sort((a,b)=>(orden[a.tipo] ?? 2)-(orden[b.tipo] ?? 2) || String(a.fecha || a.fecha1 || "").localeCompare(String(b.fecha || b.fecha1 || "")))
-    badge.textContent = `${filtradas.length} de ${todas.length} alerta${todas.length===1 ? "" : "s"}`
-    window.estadoIslasAlertas = window.estadoIslasAlertas || {}
-    contenedor.querySelectorAll(".alerts-island").forEach(isla=>{
-        window.estadoIslasAlertas[isla.dataset.categoria] = {
-            abierta:isla.open, scroll:isla.querySelector(".alerts-island-body")?.scrollTop || 0
-        }
-    })
-    const grupos = Object.entries(categorias).filter(([key])=>key!=="todos")
-        .map(([key,titulo])=>({key,titulo,items:filtradas.filter(a=>a.kind===key)}))
-        .filter(g=>g.items.length)
-    contenedor.classList.toggle("alerts-islands-single",grupos.length===1)
-    contenedor.innerHTML = filtradas.length ? grupos.map(grupo=>{
-        const criticas = grupo.items.filter(a=>a.tipo==="danger").length
-        const estado = window.estadoIslasAlertas[grupo.key]
-        return `<details class="alerts-island alerts-island-${grupo.key}" data-categoria="${grupo.key}" ${estado?.abierta===false ? "" : "open"}>
-            <summary class="alerts-island-heading"><div><h3>${grupo.titulo}</h3><p>${criticas ? `${criticas} crítica${criticas===1 ? "" : "s"} · ` : ""}${grupo.items.length} alerta${grupo.items.length===1 ? "" : "s"}</p></div>
-                <span class="alerts-island-count">${grupo.items.length}</span><span class="alerts-island-chevron">${iconoVistaAlertas("arrow")}</span>
-            </summary>
-            <div class="alerts-island-body" tabindex="0" role="region" aria-label="Alertas de ${grupo.titulo}">${grupo.items.map(renderAlertaCard).join("")}</div>
-        </details>`
-    }).join("") :
-        `<div class="alerts-empty">${iconoVistaAlertas(todas.length ? "search" : "check")}<strong>${todas.length ? "No hay coincidencias" : "Todo revisado para esta selección"}</strong><p>${todas.length ? "Prueba otra búsqueda, categoría o prioridad." : "Puedes revisar otro período o ajustar las reglas de cobertura."}</p></div>`
-    contenedor.querySelectorAll(".alerts-island").forEach(isla=>{
-        const cuerpo = isla.querySelector(".alerts-island-body")
-        cuerpo.scrollTop = window.estadoIslasAlertas[isla.dataset.categoria]?.scroll || 0
-    })
-}
 
 function renderAlertaCard(alerta){
     const prioridad = {danger:["Crítica","error"],warning:["Advertencia","warning"],info:["Informativa","info"]}
@@ -242,14 +183,16 @@ function renderAlertaCard(alerta){
     let mensaje = alerta.mensaje || "Revisa la cobertura configurada."
     if(alerta.kind === "descanso") mensaje = `${Number(alerta.descanso).toFixed(1)} h de descanso entre jornadas · Mínimo 12 h`
     if(alerta.kind === "horas") mensaje = `${Number(alerta.horas).toFixed(1)} h asignadas / ${Number(alerta.jornada)} h de jornada · ${Number(alerta.diferencia)>0 ? "+" : ""}${Number(alerta.diferencia).toFixed(1)} h de diferencia`
-    const accion = alerta.kind === "cobertura" ? "mostrarVistaCobertura()" : "mostrarVistaPlanificacion(false)"
+    const accion = alerta.kind === "cobertura" ? "mostrarVistaCobertura()" : "mostrarPlanificacionDesdeAlerta(this.dataset.trabajadorId, this.dataset)"
     return `<article class="alerts-row alerts-row-${tipo}">
         ${iconoVistaAlertas(icono,"alerts-row-icon")}
         <div class="alerts-row-content"><div class="alerts-row-meta"><span class="alerts-priority">${etiqueta}</span><span>${categorias[alerta.kind] || "Alerta"}</span><span>${escaparHTML(fecha)}</span></div>
             <h3>${escaparHTML(titulo)}</h3><p>${escaparHTML(mensaje)}</p>
             ${alerta.detalle ? `<details class="alerts-row-detail"><summary>Ver detalle</summary><p>${escaparHTML(alerta.detalle)}</p></details>` : ""}
         </div>
-        <button type="button" class="alerts-row-action" onclick="${accion}">${alerta.kind === "cobertura" ? "Ver cobertura" : "Ver planificación"}${iconoVistaAlertas("arrow")}</button>
+        <button type="button" class="alerts-row-action" data-trabajador-id="${escaparHTML(alerta.trabajador_id)}"
+            data-alerta-kind="${escaparHTML(alerta.kind)}" data-fecha1="${escaparHTML(alerta.fecha1 || "")}" data-fecha2="${escaparHTML(alerta.fecha2 || "")}" data-semana="${escaparHTML(alerta.semana || "")}" data-mes="${mesActual}" data-anio="${anioActual}" data-motivo-alerta="${escaparHTML(mensaje)}"
+            onclick="${accion}">${alerta.kind === "cobertura" ? "Ver cobertura" : "Ver planificación"}${iconoVistaAlertas("arrow")}</button>
     </article>`
 }
 
@@ -355,42 +298,6 @@ function renderAlertaDescanso(alerta, tono){
 
 }
 
-// Wire de los botones de filtro de la vista Alertas. Selecciona uno solo a
-// la vez y re-pinta la lista.
-function wireFiltrosAlertas(){
-
-    const botones = document.querySelectorAll(".filtro-alerta")
-
-    if(!botones || botones.length === 0){ return }
-
-    botones.forEach(boton => {
-
-        if(boton.dataset.wired === "1"){ return }
-        boton.dataset.wired = "1"
-
-        boton.addEventListener("click", () => {
-
-            botones.forEach(b =>
-                b.classList.remove("bg-slate-900", "text-white")
-            )
-            botones.forEach(b =>
-                b.classList.add("bg-slate-100", "text-slate-700")
-            )
-
-            boton.classList.remove("bg-slate-100", "text-slate-700")
-            boton.classList.add("bg-slate-900", "text-white")
-
-            renderizarAlertasVista()
-
-        })
-
-    })
-
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    wireFiltrosAlertas()
-})
 
 // (Re)construye el panel de casillas a partir de los cargos existentes.
 function cargarCargos(){
@@ -825,6 +732,7 @@ function renderizarTrabajadores(trabajadores){
         exteriores.push({el, top: el.scrollTop, left: el.scrollLeft})
     }
     const activo = document.activeElement
+    const restaurarFocoAlerta = activo?.classList.contains("planning-alert-target") && contenedor.contains(activo)
     const edicion = activo?.matches(".turno-input") && contenedor.contains(activo)
         ? {
             trabajadorId: activo.closest(".fila-trabajador").dataset.trabajadorId,
@@ -922,6 +830,7 @@ function renderizarTrabajadores(trabajadores){
         el.scrollTop = top
         el.scrollLeft = left
     })
+    if(typeof aplicarFocoAlertaPlanificacion === "function") aplicarFocoAlertaPlanificacion(restaurarFocoAlerta)
 }
 
 // =====================================================

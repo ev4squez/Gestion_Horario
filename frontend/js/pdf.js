@@ -12,33 +12,10 @@ function exportarPDF(){
             construirLeyenda(),
             ...construirTabla({trabajadores,semanas,mesActual})
         ]
+        // Las alertas se resumen en una única hoja de dashboard (tamaño fijo),
+        // en lugar de listar todas las incidencias.
         const alertas = typeof calcularTodasAlertas === 'function' ? calcularTodasAlertas(trabajadores) : []
-        if(alertas.length){
-            const body = [[
-                {text:'TIPO',bold:true},{text:'REFERENCIA',bold:true},{text:'MOTIVO',bold:true}
-            ]]
-            alertas.forEach(a => {
-                const color = a.tipo === 'danger' ? '#b34545' : a.tipo === 'info' ? '#365fc4' : '#996515'
-                const tipo = a.kind === 'horas' ? 'Horas semanales' : a.kind === 'cobertura' ? 'Cobertura' : 'Descanso'
-                const referencia = a.kind === 'cobertura' ? a.titulo : a.trabajador
-                const motivo = a.kind === 'horas'
-                    ? `Semana ${a.semana} · ${a.horas}h / ${a.jornada}h · ${a.diferencia > 0 ? '+' : ''}${a.diferencia}h`
-                    : a.kind === 'cobertura' ? `${a.mensaje} · ${a.detalle}`
-                    : `${a.fecha1} al ${a.fecha2} · Descanso ${a.descanso.toFixed(1)}h (mínimo 12h)`
-                body.push([{text:tipo,color},{text:referencia || '—'},{text:motivo}])
-            })
-            contenido.push({pageBreak:'before',stack:[
-                {text:'Alertas de planificación',fontSize:17,bold:true,color:'#253247',margin:[0,0,0,5]},
-                {text:`${alertas.length} observaciones · ${obtenerNombreMes(mesActual)} ${anioActual}`,fontSize:9,color:'#626f82',margin:[0,0,0,12]}
-            ]})
-            contenido.push({
-                table:{headerRows:1,dontBreakRows:true,widths:[90,180,'*'],body},
-                layout:{hLineWidth:()=>.5,vLineWidth:()=>0,hLineColor:()=> '#e5eaf0',
-                    paddingTop:()=>7,paddingBottom:()=>7,paddingLeft:()=>8,paddingRight:()=>8,
-                    fillColor:row=>row===0 ? '#ecf2ff' : row%2===0 ? '#f6f9fc' : '#fff'},
-                fontSize:8,color:'#253247'
-            })
-        }
+        contenido.push(construirDashboardAlertasPDF({alertas,trabajadores,semanas,mesActual,anioActual,cecos}))
         const documento = {
             pageSize:'A4',pageOrientation:'landscape',pageMargins:[28,32,28,34],
             info:{title:`Planificación ${obtenerNombreMes(mesActual)} ${anioActual}`,subject:'Planificación de turnos'},
