@@ -230,6 +230,19 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 #vista-planificacion .schedule-hours .columna-horas .h-2\.5 { height: 3px; width: 62px; margin: 5px auto 3px; }
 #vista-planificacion .schedule-table tbody tr:hover > th, #vista-planificacion .schedule-table tbody tr:hover > td { background: #f5f8fe; }
 #vista-planificacion .schedule-empty { font-size: 12px; color: #626f82; padding: 24px; }
+#vista-planificacion .planning-alert-target { background: #fff5d9; box-shadow: inset 0 0 0 2px #be8125; }
+#vista-planificacion .planning-alert-target:focus { outline: 2px solid #8c601d; outline-offset: -3px; }
+#vista-planificacion .planning-alert-row > .schedule-name { background: #fff5d9; }
+#vista-planificacion .planning-alert-marker { display: block; margin-top: 4px; color: #805315; font-size: 10px; font-weight: 700; }
+.planning-alert-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #e9cf9f; background: #fff8e8; border-radius: 12px 12px 0 0; }
+.planning-alert-context > div:first-child { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
+.planning-alert-context small { display: block; color: #805315; font-size: 10px; margin-bottom: 4px; }
+.planning-alert-context strong { display: block; color: #493920; font-size: 13px; }
+.planning-alert-context p { margin-top: 5px; color: #66543a; font-size: 11px; line-height: 1.6; }
+.planning-alert-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.planning-alert-context button { min-height: 40px; padding: 8px 10px; border: 1px solid #d9c39e; border-radius: 6px; background: #fff; color: #66502d; font-size: 11px; }
+.planning-alert-context button:focus-visible { outline: 2px solid #8c601d; outline-offset: 2px; }
+@media (max-width: 740px) { .planning-alert-context button { min-height: 44px; } }
 .app-content > .app-columns.workload-collapsed { grid-template-columns: minmax(0, 1fr); }
 .planning-tooltip { position: fixed; z-index: 10000; max-width: min(320px, calc(100vw - 24px)); background: #253247; color: #fff; border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.5; white-space: pre-line; box-shadow: 0 6px 20px #25324730; pointer-events: none; }
 @media (max-width: 767px) {
@@ -483,7 +496,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .cargo-picker-content { padding: 18px 24px; overflow-y: auto; min-height: 0; }
 .cargo-picker-search input { width: 100%; border: 1px solid #dce3ed; padding: 10px 12px; border-radius: 7px; font-size: 12px; margin-bottom: 14px; }
 .cargo-picker-all, .cargo-picker-option { display: flex; align-items: center; gap: 11px; cursor: pointer; font-size: 12px; }
-.cargo-picker input[type=checkbox] { width: 16px; height: 16px; flex-shrink: 0; accent-color: #5d87ff; }
+.cargo-picker input[type=checkbox], .cargo-picker input[type=radio] { width: 16px; height: 16px; flex-shrink: 0; accent-color: #5d87ff; }
 .cargo-picker-all { padding: 13px 12px; background: #f3f6ff; border: 1px solid #dce6ff; border-radius: 8px; }
 .cargo-picker-all > span:nth-child(2) { flex: 1; }
 .cargo-picker-all strong { font-weight: 600; }

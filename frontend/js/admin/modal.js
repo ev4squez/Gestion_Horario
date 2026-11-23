@@ -125,7 +125,7 @@ function mostrarVistaTrabajadores() {
 
 }
 
-function mostrarVistaPlanificacion(seleccionarCargos = true) {
+function mostrarVistaPlanificacion(seleccionarCargos = false) {
 
     if(redirigirSuperAdmin()) return
 
@@ -136,10 +136,16 @@ function mostrarVistaPlanificacion(seleccionarCargos = true) {
         return
     }
 
-    // La selección se confirma antes de mostrar la grilla. Ni cancelar el
-    // diálogo ni volver desde otra vista deben permitir planificar sin cargos.
+    // Reutilizar los cargos confirmados al navegar. Pedir selección solo
+    // cuando falte o se solicite explícitamente cambiarla.
+    const seleccion = window.cargosSeleccionados || []
+    const cargosValidos = seleccion.length > 0 && seleccion.every(cargo =>
+        typeof cargo === "string" && cargo.trim() && trabajadoresGlobal.some(t =>
+            t.activo !== false && t.cargo === cargo
+        )
+    )
     if(typeof abrirSelectorCargosPlanificacion === "function" &&
-        (seleccionarCargos || !window.cargosSeleccionados?.length)){
+        (seleccionarCargos || !cargosValidos)){
         abrirSelectorCargosPlanificacion(true)
         return
     }
@@ -155,6 +161,38 @@ function mostrarVistaPlanificacion(seleccionarCargos = true) {
     mostrarPanelDerecho()
 
     actualizarVistaPlanificacion()
+
+}
+
+function mostrarPlanificacionDesdeAlerta(trabajadorId, contexto = {}){
+
+    if(redirigirSuperAdmin()) return
+    if(!(adminAutorizado && obtenerToken())){
+        iniciarSesion()
+        return
+    }
+
+    const trabajador = trabajadoresGlobal.find(t =>
+        String(t.id) === String(trabajadorId) && t.activo !== false
+    )
+    if(!trabajador || typeof trabajador.cargo !== "string" || !trabajador.cargo.trim()){
+        // Si el colaborador cambió o ya no tiene cargo, no reutilizar una
+        // selección anterior que podría mostrar otro equipo.
+        if(typeof limpiarFocoAlertaPlanificacion === "function") limpiarFocoAlertaPlanificacion()
+        mostrarVistaPlanificacion(true)
+        return
+    }
+
+    // La alerta identifica el cargo a consultar y permite abrir directamente
+    // su equipo, aunque antes se estuviera revisando otro cargo.
+    window.cargosSeleccionados = [trabajador.cargo]
+    window.busquedaPlanificacion = ""
+    const busqueda = document.getElementById("busqueda-planificacion")
+    if(busqueda) busqueda.value = ""
+    if(typeof guardarPreferenciaCargos === "function") guardarPreferenciaCargos()
+    cargarCargos()
+    if(typeof prepararFocoAlertaPlanificacion === "function") prepararFocoAlertaPlanificacion(trabajador, contexto)
+    mostrarVistaPlanificacion(false)
 
 }
 
@@ -180,7 +218,7 @@ function mostrarVistaCobertura() {
 
 }
 
-function mostrarVistaAlertas(){
+function mostrarVistaAlertas(seleccionarCargo = false){
 
     if(redirigirSuperAdmin()) return
 
@@ -190,9 +228,26 @@ function mostrarVistaAlertas(){
         return
     }
 
+    const seleccion = window.cargosSeleccionados || []
+    const cargoValido = seleccion.length === 1 && trabajadoresGlobal.some(t =>
+        t.activo !== false && t.cargo === seleccion[0] && String(t.cargo || "").trim()
+    )
+    if(typeof abrirSelectorCargosPlanificacion === "function" && (seleccionarCargo || !cargoValido)){
+        abrirSelectorCargosPlanificacion(true, "alertas")
+        return
+    }
+
     marcarMenuActivo("menu-alertas")
 
     ocultarTodasLasVistas()
+
+    // Compartir el contenedor desplazable de las otras vistas, sin dejar
+    // un área de trabajo vacía por encima del dashboard.
+    const dashboard = document.getElementById("vista-alertas")
+    const principal = document.getElementById("main-content")
+    if(dashboard && principal && dashboard.parentElement !== principal){
+        principal.appendChild(dashboard)
+    }
 
     mostrarVista("vista-alertas")
 

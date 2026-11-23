@@ -662,86 +662,11 @@ function etiquetaGrupoRegla(grupo){
     return `${grupo.valor || "(sin valor)"}`
 }
 
-function renderizarResultadoCobertura(){
-
-    const contenedor =
-        document.getElementById("resultado-cobertura")
-
-    const badge =
-        document.getElementById("badge-cobertura")
-
-    if(!contenedor){ return }
-
-    const resultados =
-        calcularCobertura()
-
-    const problemas =
-        resultados.filter(r => !r.cubierto)
-
-    if(badge){
-        badge.textContent =
-            problemas.length === 0
-                ? "Cubierto"
-                : `${problemas.length} brechas`
-
-        badge.className =
-            problemas.length === 0
-                ? "px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold"
-                : "px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold"
-    }
-
-    if(coberturaConfigGlobal.length === 0){
-        contenedor.innerHTML = `
-            <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-500">
-                Configura reglas por área o CECO para validar apertura, cierre y continuidad horaria.
-            </div>
-        `
-        return
-    }
-
-    if(problemas.length === 0){
-        contenedor.innerHTML = `
-            <div class="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">
-                Todos los días configurados tienen cobertura completa para el mes seleccionado.
-            </div>
-        `
-        return
-    }
-
-    // Las brechas individuales se muestran ahora en la vista Alertas para
-    // evitar duplicación. Acá dejamos un resumen + CTA hacia esa vista.
-    contenedor.innerHTML = `
-        <div class="p-5 rounded-2xl border border-amber-200 bg-amber-50/70 text-amber-800">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                    <p class="font-black">${problemas.length} brecha${problemas.length === 1 ? "" : "s"} detectada${problemas.length === 1 ? "" : "s"}</p>
-                    <p class="text-sm mt-1">
-                        Hay días donde la dotación no alcanza el mínimo configurado.
-                        Abrí la vista Alertas para ver el detalle por fecha, área y CECO.
-                    </p>
-                </div>
-                <button type="button" onclick="mostrarVistaAlertas()"
-                    class="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-semibold transition flex items-center gap-2 self-start md:self-auto">
-                    <span class="material-symbols-outlined text-lg">warning</span>
-                    Ver alertas
-                </button>
-            </div>
-        </div>
-    `
-
-    // Refresca también la vista Alertas para que, si el usuario la abre justo
-    // después de tocar mes/año en cobertura, vea la información al día.
-    if(typeof renderizarAlertasVista === "function"){
-        renderizarAlertasVista()
-    }
-
-}
-
 function renderizarCobertura(){
 
     poblarValoresCobertura()
     renderizarReglasCobertura()
-    renderizarResultadoCobertura()
+
     renderizarColacion()
 
 }

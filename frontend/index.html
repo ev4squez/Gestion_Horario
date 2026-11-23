@@ -495,6 +495,7 @@
     }
   </style>
   <link rel="stylesheet" href="css/admin-theme.css" />
+  <link rel="stylesheet" href="css/alertas-dashboard.css" />
 </head>
 
 <body class="sesion-inicializando">
@@ -1298,13 +1299,10 @@
                       Cobertura Operativa
                     </h2>
                     <p class="text-slate-500 mt-2">
-                      Validación de apertura, cierre y continuidad por área o CECO.
+                      Configura la dotación mínima por área, CECO o cargo y los tiempos de colación.
                     </p>
                   </div>
-                  <div class="coverage-header-actions"><button type="button" class="coverage-new" onclick="abrirFormularioCobertura(true)">+ Nueva regla</button><span id="badge-cobertura"
-                    class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold self-start">
-                    Sin reglas
-                  </span></div>
+                  <div class="coverage-header-actions"><button type="button" class="coverage-new" onclick="abrirFormularioCobertura(true)">+ Nueva regla</button></div>
                 </div>
 
                 <div class="coverage-layout">
@@ -1420,12 +1418,7 @@
                       </div>
                     </div>
 
-                    <div>
-                      <h3 class="font-black text-slate-800 mb-3">
-                        Resultado del mes seleccionado
-                      </h3>
-                      <div id="resultado-cobertura" class="space-y-3"></div>
-                    </div>
+
                   </div>
                 </div>
               </div>
@@ -1630,32 +1623,49 @@
       <!-- VISTA ALERTAS -->
       <!-- ===================================== -->
 
-      <div id="vista-alertas" class="hidden card alerts-workspace">
+      <div id="vista-alertas" class="hidden alerts-dashboard">
         <header class="alerts-heading">
-          <div><p class="alerts-eyebrow">Revisión de turnos</p><h2>Alertas</h2>
+          <div><p class="alerts-eyebrow">Monitoreo de planificación</p><h2>Dashboard de alertas</h2>
             <p id="alertas-contexto">Cobertura, descanso y cumplimiento de jornada.</p></div>
+          <div class="alert-dash-heading-actions">
+          <div class="alert-dash-cargo"><span id="cargo-alertas-etiqueta">Cargo a consultar</span><button type="button" id="cargo-alertas" aria-describedby="cargo-alertas-etiqueta" aria-haspopup="dialog" onclick="abrirSelectorCargosAlertas()">Seleccionar cargo</button></div>
+          <span id="alertas-estado" class="alert-dash-status" role="status"></span>
           <button type="button" onclick="mostrarVistaCobertura()" class="alerts-secondary">
             <svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg>Configurar cobertura
-          </button>
+          </button></div>
         </header>
-        <div class="alerts-status" id="alertas-estado" role="status"></div>
-        <div class="alerts-controls">
-          <div class="alerts-tabs" role="group" aria-label="Categoría de alerta">
-            <button type="button" data-filtro-alerta="todos" aria-pressed="true" class="filtro-alerta bg-slate-900 text-white">Todas</button>
-            <button type="button" data-filtro-alerta="cobertura" aria-pressed="false" class="filtro-alerta">Cobertura</button>
-            <button type="button" data-filtro-alerta="descanso" aria-pressed="false" class="filtro-alerta">Descanso</button>
-            <button type="button" data-filtro-alerta="horas" aria-pressed="false" class="filtro-alerta">Horas</button>
-          </div>
-          <div class="alerts-search-controls">
+        <section id="alertas-sin-cargo" class="alert-dash-no-scope" role="status"><h3>Selecciona un cargo</h3><p id="alertas-sin-cargo-mensaje">Usa Seleccionar cargo para elegir un único cargo en el mismo modal de Planificación.</p></section>
+        <section class="alert-dash-kpis" id="alertas-kpis" aria-label="Indicadores del cargo y período seleccionados" data-cargo-requerido hidden></section>
+        <p class="alert-dash-scope" data-cargo-requerido hidden>Resumen del cargo y período seleccionados. Haz clic en un indicador o gráfico para filtrar el detalle.</p>
+        <div class="alert-dash-charts" data-cargo-requerido hidden>
+          <section class="alert-dash-panel" aria-labelledby="alertas-categorias-titulo">
+            <header><h3 id="alertas-categorias-titulo">Alertas por categoría</h3><p>Dónde están los ajustes pendientes</p></header>
+            <div id="alertas-por-categoria" class="alert-dash-categories"></div>
+          </section>
+          <section class="alert-dash-panel" aria-labelledby="alertas-semanas-titulo">
+            <header><h3 id="alertas-semanas-titulo">Distribución semanal</h3><p>Cada alerta se cuenta en una sola semana</p></header>
+            <div class="alert-dash-legend"><span><i class="alert-dash-segment-danger"></i>Críticas</span><span><i class="alert-dash-segment-warning"></i>Advertencias</span><span><i class="alert-dash-segment-info"></i>Informativas</span></div>
+            <div id="alertas-por-semana" class="alert-dash-weeks" role="group" aria-label="Alertas por semana y prioridad"></div>
+          </section>
+        </div>
+        <section class="alert-dash-panel alert-dash-detail" aria-labelledby="alertas-detalle-titulo" data-cargo-requerido hidden>
+          <header class="alert-dash-detail-header"><div><h3 id="alertas-detalle-titulo">Detalle de alertas</h3><p>Prioridad más alta primero</p></div><span id="badge-alertas-vista" role="status">0 alertas</span></header>
+          <div class="alert-dash-filters">
             <label class="alerts-search"><svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
               <span class="sr-only">Buscar alertas</span><input id="busqueda-alertas" type="search" placeholder="Nombre, fecha o motivo…" oninput="renderizarAlertasVista()"></label>
+            <label><span class="sr-only">Categoría</span><select id="categoria-alertas" onchange="renderizarAlertasVista()"><option value="todos">Todas las categorías</option><option value="cobertura">Cobertura</option><option value="descanso">Descanso</option><option value="horas">Horas semanales</option></select></label>
             <label><span class="sr-only">Prioridad</span><select id="prioridad-alertas" onchange="renderizarAlertasVista()">
               <option value="todos">Todas las prioridades</option><option value="danger">Críticas</option><option value="warning">Advertencias</option><option value="info">Informativas</option>
             </select></label>
+            <label><span class="sr-only">Semana</span><select id="semana-alertas" onchange="renderizarAlertasVista()"><option value="todos">Todas las semanas</option></select></label>
+            <button type="button" class="alert-dash-reset" onclick="limpiarFiltrosDashboardAlertas()">Limpiar filtros</button>
           </div>
-        </div>
-        <div class="alerts-list-heading"><span id="badge-alertas-vista" aria-live="polite">0 alertas</span><span>Islas por categoría · Prioridad más alta primero</span></div>
-        <div id="contenedor-alertas-vista" class="alerts-list"></div>
+          <div id="contenedor-alertas-vista" class="alert-dash-detail-list"></div>
+          <footer class="alert-dash-pagination"><span id="alertas-rango">0 alertas para mostrar</span><div>
+            <label for="alertas-por-pagina">Por página</label><select id="alertas-por-pagina" onchange="renderizarAlertasVista()"><option>10</option><option>20</option><option>50</option></select>
+            <span id="alertas-pagina">Página 1 de 1</span><button type="button" id="alertas-anterior" onclick="cambiarPaginaDashboardAlertas(-1)" disabled>Anterior</button><button type="button" id="alertas-siguiente" onclick="cambiarPaginaDashboardAlertas(1)" disabled>Siguiente</button>
+          </div></footer>
+        </section>
       </div>
     </main>
   </div>
@@ -1680,6 +1690,8 @@
   <script src="js/resumen.js"></script>
   <script src="js/cobertura.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/planificacion-alerta.js"></script>
+  <script src="js/alertas-dashboard.js"></script>
   <script src="js/carga-modal.js"></script>
   <script src="js/selector-cargos.js"></script>
   <script src="js/motor_diagnostico.js"></script>
@@ -1694,6 +1706,7 @@
   <script src="js/pdf/cabecera.js"></script>
   <script src="js/pdf/leyenda.js"></script>
   <script src="js/pdf/tabla.js"></script>
+  <script src="js/pdf/alertas-dashboard.js"></script>
   <script src="js/pdf.js"></script>
 
   <script src="js/admin/auth.js?v=20261015-saas-credentials"></script>

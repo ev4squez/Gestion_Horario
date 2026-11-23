@@ -111,3 +111,98 @@ test('confirmar retira el diálogo inmediatamente aunque el evento close sea dif
     c.abrirSelectorCargosPlanificacion(true);
     assert.equal(doc.querySelector('dialog').open,true);
 });
+
+test('Alertas reutiliza el mismo modal con selección única y sin opción Todos',()=>{
+    const {c,doc,change,enviar,fila,aperturas}=contexto();
+    c.window.cargosSeleccionados=['Técnico','Ingeniero'];c.guardarPreferenciaCargos();
+    let alertas=0;c.mostrarVistaAlertas=seleccionar=>{assert.equal(seleccionar,false);alertas++};
+    c.abrirSelectorCargosPlanificacion(true,'alertas');
+    assert.equal(doc.querySelector('dialog').id,'selector-cargos-planificacion');
+    assert.equal(doc.querySelector('[data-todos]'),null);
+    assert.equal(doc.querySelectorAll('.cargo-picker-option input[type=radio]').length,2);
+    assert(doc.getElementById('cargo-picker-title').textContent.includes('consultar'));
+    assert.equal(doc.querySelector('[type=submit]').textContent,'Ver alertas');
+    assert.equal(doc.querySelector('[type=submit]').disabled,true);
+    enviar();assert.equal(alertas,0);
+    for(const nombre of ['Técnico','Ingeniero']){
+        const input=fila(nombre).querySelector('input');input.checked=true;change(input);
+        assert.equal(doc.querySelectorAll('.cargo-picker-option input:checked').length,1);
+    }
+    enviar();
+    assert.equal(alertas,1);assert.equal(aperturas(),0);
+    assert.deepEqual(Array.from(c.window.cargosSeleccionados),['Ingeniero']);
+    assert.equal(doc.getElementById('busqueda-planificacion').value,'');
+    assert.equal(doc.querySelector('dialog'),null);
+});
+
+test('cancelar el modal de Alertas conserva el cargo actual y no navega a Planificación',()=>{
+    const {c,doc,change,fila,aperturas}=contexto();
+    c.window.cargosSeleccionados=['Técnico'];
+    c.localStorage.setItem(c.clavePreferenciaCargos(),JSON.stringify(['Técnico','Ingeniero']));
+    let alertas=0;c.mostrarVistaAlertas=()=>{alertas++};
+    c.abrirSelectorCargosPlanificacion(false,'alertas');
+    assert.equal(fila('Técnico').querySelector('input').checked,true);
+    const input=fila('Ingeniero').querySelector('input');input.checked=true;change(input);
+    doc.querySelector('.cargo-picker-cancel').click();
+    assert.deepEqual(Array.from(c.window.cargosSeleccionados),['Técnico']);
+    assert.equal(alertas,0);assert.equal(aperturas(),0);
+});
+
+test('el menú Alertas exige confirmar un cargo en el modal compartido antes de consultar',()=>{
+    const {c,doc,change,enviar,fila}=contexto();
+    for(const id of ['vista-alertas','vista-trabajadores','main-content']){
+        const el=doc.createElement('div');el.id=id;el.classList.add('hidden');doc.body.appendChild(el);
+    }
+    vm.runInContext(fs.readFileSync('frontend/js/admin/modal.js','utf8'),c);
+    c.adminAutorizado=true;c.obtenerToken=()=> 'sesion-de-prueba';
+    let renders=0;c.renderizarAlertasVista=()=>{renders++};
+    c.mostrarVistaAlertas();
+    assert.equal(renders,0);assert(doc.getElementById('vista-alertas').classList.contains('hidden'));
+    assert.equal(doc.querySelector('[type=submit]').textContent,'Ver alertas');
+    const input=fila('Técnico').querySelector('input');input.checked=true;change(input);enviar();
+    assert.equal(renders,1);assert.equal(doc.getElementById('vista-alertas').classList.contains('hidden'),false);
+    assert.equal(doc.getElementById('vista-alertas').parentElement,doc.getElementById('main-content'));
+});
+
+test('ambos módulos reutilizan una selección válida sin volver a abrir el modal',()=>{
+    for(const [vista,cargos] of [
+        ['Planificacion',['Técnico']],
+        ['Planificacion',['Técnico','Ingeniero']],
+        ['Alertas',['Técnico']]
+    ]){
+        const {c,doc}=contexto();
+        for(const id of ['vista-planificacion','vista-alertas','vista-trabajadores','right-panel','main-content']){
+            const el=doc.createElement('div');el.id=id;el.classList.add('hidden');doc.body.appendChild(el);
+        }
+        vm.runInContext(fs.readFileSync('frontend/js/admin/modal.js','utf8'),c);
+        c.adminAutorizado=true;c.obtenerToken=()=> 'sesion-de-prueba';
+        c.window.cargosSeleccionados=cargos;
+        let renders=0;c.actualizarVistaPlanificacion=()=>{renders++};c.renderizarAlertasVista=()=>{renders++};
+        c[`mostrarVista${vista}`]();
+        assert.equal(doc.querySelector('dialog'),null,`${vista} no debe volver a pedir los cargos`);
+        assert.equal(renders,1);
+        assert.deepEqual(Array.from(c.window.cargosSeleccionados),cargos);
+        assert.equal(c.window.busquedaPlanificacion,'Persona anterior');
+        assert.equal(doc.getElementById(`vista-${vista.toLowerCase()}`).classList.contains('hidden'),false);
+    }
+});
+
+test('una selección vacía, eliminada o inactiva exige modal; Alertas también rechaza varios cargos',()=>{
+    const casos=[
+        ['Planificacion',[]],['Planificacion',['Eliminado']],['Planificacion',['Técnico','Eliminado']],
+        ['Planificacion',['Inactivo']],['Planificacion',['']],
+        ['Alertas',[]],['Alertas',['Técnico','Ingeniero']],['Alertas',['Eliminado']],
+        ['Alertas',['Inactivo']],['Alertas',['']]
+    ];
+    for(const [vista,cargos] of casos){
+        const {c,doc}=contexto();
+        c.trabajadoresGlobal.push({cargo:'Inactivo',activo:false});
+        vm.runInContext(fs.readFileSync('frontend/js/admin/modal.js','utf8'),c);
+        c.adminAutorizado=true;c.obtenerToken=()=> 'sesion-de-prueba';
+        c.window.cargosSeleccionados=cargos;
+        let renders=0;c.actualizarVistaPlanificacion=()=>{renders++};c.renderizarAlertasVista=()=>{renders++};
+        c[`mostrarVista${vista}`](false);
+        assert.equal(renders,0,`${vista} no debe consultar una selección inválida: ${cargos}`);
+        assert.equal(doc.getElementById('selector-cargos-planificacion')?.open,true);
+    }
+});
