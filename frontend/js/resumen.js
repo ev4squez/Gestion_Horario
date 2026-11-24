@@ -1064,8 +1064,344 @@ function calcularAlertasHoras(
 
 
 // =====================================================
+// ALERTA NOCTURNO 5x2 (último día de la racha)
+// =====================================================
+// Regla: en jornada 5x2 de noche, el último día de trabajo de una racha no
+// puede extenderse al día siguiente; el turno debe terminar antes de las
+// 23:59. Se marca cada turno nocturno (cruza medianoche) cuyo día siguiente
+// no es de trabajo (Libre, Saliente, vacío o vacaciones).
+
+// Jornada mínima (horas) para aplicar la regla 5x2. Por debajo de este valor
+// el colaborador se considera de otro régimen y no recibe la alerta.
+const JORNADA_MINIMA_5X2 = 30
+
+function calcularAlertasNocturnoUltimoDia(trabajadores){
+
+    const alertas = []
+
+    const semanas = generarSemanas(mesActual, anioActual)
+    const inicioVisible = new Date(semanas[0].inicio)
+    inicioVisible.setHours(0, 0, 0, 0)
+    const finVisible = new Date(semanas[semanas.length - 1].fin)
+    finVisible.setHours(23, 59, 59, 999)
+
+    trabajadores.forEach(trabajador => {
+
+        // La regla es del régimen 5x2: los colaboradores de jornada menor
+        // (p. ej. 20 h) no se evalúan y no reciben esta alerta.
+        if((parseInt(trabajador.jornada) || 0) < JORNADA_MINIMA_5X2) return
+
+        planificacionGlobal
+            .filter(p => String(p.trabajador_id) === String(trabajador.id))
+            .forEach(p => {
+
+                const fecha = String(p.fecha || "").slice(0, 10)
+                if(!fecha) return
+
+                const dia = new Date(`${fecha}T00:00:00`)
+                if(dia < inicioVisible || dia > finVisible) return
+
+                if(!resumenTurnoEsNocturno(p.turno)) return
+
+                const siguiente = new Date(`${fecha}T00:00:00`)
+                siguiente.setDate(siguiente.getDate() + 1)
+                const fechaSiguiente = resumenFechaISO(siguiente)
+
+                // Si el día siguiente también se trabaja, no es el último día de la racha.
+                if(resumenTurnoEsTrabajado(obtenerTurnoGuardado(trabajador.id, fechaSiguiente))) return
+
+                const fin =
+                    String(p.turno).match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/)?.[2] || ""
+
+                alertas.push({
+
+                    kind: "nocturno5x2",
+                    trabajador_id: trabajador.id,
+                    trabajador: trabajador.nombre,
+                    responsable: trabajador.responsable,
+                    fecha,
+                    fecha1: fecha,
+                    turno: p.turno,
+                    tipo: "danger",
+
+                    mensaje: `El turno cruza la medianoche y termina el ${fechaSiguiente} a las ${fin}.`,
+                    detalle: `Último día de la racha nocturna: el día siguiente (${fechaSiguiente}) no es de trabajo, así que el turno debe terminar antes de las 23:59.`
+
+                })
+
+            })
+
+    })
+
+    return alertas
+
+}
+
+
+// =====================================================
+// ALERTA DOMINGOS LIBRES (art. 38, categorías 2 y 7)
+// =====================================================
+// Inciso 5 del art. 38: en las categorías 2 y 7, al menos dos de los días de
+// descanso del mes calendario deben ser domingo. Solo se evalúan trabajadores
+// con esa categoría y con turnos cargados en el mes visible (sin turnos no
+// hay nada que comparar).
+
+const CATEGORIAS_DOMINGO_ART38 = [2, 7]
+
+function calcularAlertasDomingosArt38(trabajadores){
+
+    const alertas = []
+
+    const prefijo =
+        `${anioActual}-${String(mesActual + 1).padStart(2, "0")}`
+
+    const nombreMes =
+        new Date(anioActual, mesActual, 1)
+            .toLocaleDateString("es-CL", {month: "long", year: "numeric"})
+
+    trabajadores.forEach(trabajador => {
+
+        if(!CATEGORIAS_DOMINGO_ART38.includes(Number(trabajador.categoria_art38))){
+            return
+        }
+
+        const tieneTurnosEnMes = planificacionGlobal.some(p =>
+            String(p.trabajador_id) === String(trabajador.id) &&
+            String(p.fecha || "").startsWith(prefijo) &&
+            resumenTurnoEsTrabajado(p.turno)
+        )
+
+        if(!tieneTurnosEnMes) return
+
+        const libres = calcularDomingosLibres(trabajador.id)
+
+        if(libres >= 2) return
+
+        alertas.push({
+
+            kind: "domingos38",
+            trabajador_id: trabajador.id,
+            trabajador: trabajador.nombre,
+            responsable: trabajador.responsable,
+
+            tipo: libres === 0 ? "danger" : "warning",
+
+            mensaje: `${libres} domingo(s) libre(s) en ${nombreMes}; el art. 38 exige al menos 2.`,
+            detalle: `Categoría ${trabajador.categoria_art38} del art. 38. El inciso 5 exige que al menos dos de los días de descanso del mes calendario sean domingo.`
+
+        })
+
+    })
+
+    return alertas
+
+}
+
+
+// =====================================================
 // RENDER ALERTAS
 // =====================================================
+
+// =====================================================
+// LÍMITES LEGALES (Código del Trabajo)
+// =====================================================
+// 1. dias:    más de 6 días trabajados en la semana (art. 28).
+// 2. diaria:  más de 10 horas netas en un día (art. 28).
+// 3. semanal: más de 42 horas netas en la semana (art. 22, vigente desde el
+//             26-04-2026). El art. 22 permite promediar hasta 4 semanas, así que
+//             es advertencia, no crítica.
+// 4. colacion: colación configurada menor a 30 minutos (art. 34), salvo
+//             trabajos de proceso continuo, que no se detectan automáticamente.
+// Las horas usan la misma base que la grilla: se descuenta la colación del CECO.
+
+const LIMITE_LEGAL_DIAS_SEMANA = 6
+const LIMITE_LEGAL_HORAS_DIA = 10
+const LIMITE_LEGAL_HORAS_SEMANA = 42
+const LIMITE_LEGAL_COLACION_MIN = 30
+
+function calcularAlertasLegales(trabajadores){
+
+    const alertas = []
+
+    const semanas = generarSemanas(mesActual, anioActual)
+
+    const isoDe = fecha =>
+        `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2,"0")}-${String(fecha.getDate()).padStart(2,"0")}`
+
+    const prefijo =
+        `${anioActual}-${String(mesActual + 1).padStart(2, "0")}`
+
+    trabajadores.forEach(trabajador => {
+
+        const colacion = colacionPorCeco(trabajador.ceco)
+        const minutosColacion = colacionMinutosPorCeco(trabajador.ceco)
+
+        const base = {
+            kind: "legal",
+            trabajador_id: trabajador.id,
+            trabajador: trabajador.nombre,
+            responsable: trabajador.responsable
+        }
+
+        // Colación del CECO: se revisa una vez por trabajador con turnos en el mes.
+        const tieneTurnosEnMes = planificacionGlobal.some(p =>
+            String(p.trabajador_id) === String(trabajador.id) &&
+            String(p.fecha || "").startsWith(prefijo) &&
+            resumenTurnoEsTrabajado(p.turno)
+        )
+
+        if(tieneTurnosEnMes && minutosColacion < LIMITE_LEGAL_COLACION_MIN){
+            alertas.push({
+                ...base,
+                regla: "colacion",
+                tipo: "warning",
+                mensaje: `Colación de ${minutosColacion} min en el CECO "${trabajador.ceco || "sin CECO"}"; el art. 34 exige al menos ${LIMITE_LEGAL_COLACION_MIN} min.`,
+                detalle: "Si el trabajo es de proceso continuo, la excepción del art. 34 puede aplicar; revísalo manualmente."
+            })
+        }
+
+        semanas.forEach((semana, indice) => {
+
+            const turnosSemana = []
+            let diasTrabajados = 0
+            let horasSemana = 0
+
+            for(let dia = 0; dia < 7; dia++){
+
+                const fecha = new Date(semana.inicio)
+                fecha.setDate(fecha.getDate() + dia)
+
+                const iso = isoDe(fecha)
+                const turno = obtenerTurnoGuardado(trabajador.id, iso)
+
+                turnosSemana.push(turno)
+
+                if(!resumenTurnoEsTrabajado(turno)) continue
+
+                diasTrabajados++
+
+                const horasDia = calcularHorasSemana([turno], colacion)
+                horasSemana += horasDia
+
+                if(horasDia > LIMITE_LEGAL_HORAS_DIA){
+                    alertas.push({
+                        ...base,
+                        regla: "diaria",
+                        fecha: iso,
+                        tipo: "danger",
+                        mensaje: `${Math.round(horasDia * 10) / 10} h netas en el día ${iso}; el máximo diario es ${LIMITE_LEGAL_HORAS_DIA} h.`,
+                        detalle: `Art. 28 del Código del Trabajo. Turno ${turno}, con la colación descontada.`
+                    })
+                }
+            }
+
+            const semanaIso = isoDe(semana.inicio)
+
+            if(diasTrabajados > LIMITE_LEGAL_DIAS_SEMANA){
+                alertas.push({
+                    ...base,
+                    regla: "dias",
+                    fecha: semanaIso,
+                    tipo: "danger",
+                    mensaje: `${diasTrabajados} días trabajados en la semana ${indice + 1}; el máximo es ${LIMITE_LEGAL_DIAS_SEMANA}.`,
+                    detalle: "Art. 28 del Código del Trabajo: la jornada semanal no puede distribuirse en más de seis días."
+                })
+            }
+
+            if(horasSemana > LIMITE_LEGAL_HORAS_SEMANA){
+                alertas.push({
+                    ...base,
+                    regla: "semanal",
+                    fecha: semanaIso,
+                    tipo: "warning",
+                    mensaje: `${Math.round(horasSemana * 10) / 10} h netas en la semana ${indice + 1}; el límite legal es ${LIMITE_LEGAL_HORAS_SEMANA} h.`,
+                    detalle: "Art. 22 del Código del Trabajo. Puede compensarse con promedios de hasta cuatro semanas; revísalo antes de tomar una decisión."
+                })
+            }
+
+        })
+
+    })
+
+    return alertas
+
+}
+
+// =====================================================
+// ALERTA DOMINGOS ANUALES (art. 38 bis, categoría 7)
+// =====================================================
+// El art. 38 bis exige siete domingos de descanso al año para la categoría 7.
+// El texto dice "durante cada año de vigencia del contrato"; el sistema no
+// guarda la fecha de inicio del contrato, así que se evalúa por año calendario.
+// Solo se evalúa cuando el trabajador tiene planificación en los 12 meses, para
+// no contar como libres los meses que aún no se han cargado.
+
+const DOMINGOS_ANUALES_ART38BIS = 7
+
+function calcularAlertasDomingosAnualArt38Bis(trabajadores){
+
+    const alertas = []
+
+    trabajadores.forEach(trabajador => {
+
+        if(Number(trabajador.categoria_art38) !== 7) return
+
+        const meses = new Set(
+            planificacionGlobal
+                .filter(p =>
+                    String(p.trabajador_id) === String(trabajador.id) &&
+                    String(p.fecha || "").startsWith(`${anioActual}-`)
+                )
+                .map(p => String(p.fecha).slice(5, 7))
+        )
+
+        if(meses.size < 12) return
+
+        let libres = 0
+
+        for(
+            let fecha = new Date(anioActual, 0, 1);
+            fecha.getFullYear() === anioActual;
+            fecha.setDate(fecha.getDate() + 1)
+        ){
+
+            if(fecha.getDay() !== 0) continue
+
+            const sabado = new Date(fecha)
+            sabado.setDate(sabado.getDate() - 1)
+
+            // Domingo trabajado: turno propio o turno del sábado que cruza la medianoche.
+            const trabajaDomingo =
+                resumenTurnoEsTrabajado(obtenerTurnoGuardado(trabajador.id, resumenFechaISO(fecha)))
+            const sabadoCruza =
+                resumenTurnoEsNocturno(obtenerTurnoGuardado(trabajador.id, resumenFechaISO(sabado)))
+
+            if(!trabajaDomingo && !sabadoCruza) libres++
+
+        }
+
+        if(libres >= DOMINGOS_ANUALES_ART38BIS) return
+
+        alertas.push({
+
+            kind: "domingos38bis",
+            trabajador_id: trabajador.id,
+            trabajador: trabajador.nombre,
+            responsable: trabajador.responsable,
+
+            tipo: "danger",
+
+            mensaje: `${libres} domingo(s) libre(s) en ${anioActual}; el art. 38 bis exige ${DOMINGOS_ANUALES_ART38BIS} al año para la categoría 7.`,
+            detalle: "Se evalúa por año calendario (el texto legal habla de cada año de contrato) y solo con planificación de los 12 meses."
+
+        })
+
+    })
+
+    return alertas
+
+}
+
 
 function calcularTodasAlertas(trabajadores) {
 
@@ -1084,9 +1420,23 @@ function calcularTodasAlertas(trabajadores) {
             trabajadores
         )
 
+    const alertasNocturno =
+        calcularAlertasNocturnoUltimoDia(
+            trabajadores
+        )
+
+    const alertasDomingos =
+        calcularAlertasDomingosArt38(
+            trabajadores
+        )
+
     return [
         ...alertasDescanso,
         ...alertasHoras,
+        ...alertasNocturno,
+        ...alertasDomingos,
+        ...calcularAlertasLegales(trabajadores),
+        ...calcularAlertasDomingosAnualArt38Bis(trabajadores),
         ...alertasCobertura
     ]
 

@@ -714,6 +714,16 @@
 
                   <label class="relative block w-full md:w-[22rem]">
                     <span class="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                      person
+                    </span>
+                    <select id="filtro-trabajador" onchange="filtrarPorTrabajador(this.value)" aria-label="Filtrar por colaborador"
+                      class="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+                      <option value="">Todos los colaboradores</option>
+                    </select>
+                  </label>
+
+                  <label class="relative block w-full md:w-[22rem]">
+                    <span class="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
                       search
                     </span>
                     <input id="busqueda-planificacion" type="search" oninput="aplicarBusquedaPlanificacion()"
@@ -1624,47 +1634,117 @@
       <!-- ===================================== -->
 
       <div id="vista-alertas" class="hidden alerts-dashboard">
-        <header class="alerts-heading">
-          <div><p class="alerts-eyebrow">Monitoreo de planificación</p><h2>Dashboard de alertas</h2>
-            <p id="alertas-contexto">Cobertura, descanso y cumplimiento de jornada.</p></div>
-          <div class="alert-dash-heading-actions">
-          <div class="alert-dash-cargo"><span id="cargo-alertas-etiqueta">Cargo a consultar</span><button type="button" id="cargo-alertas" aria-describedby="cargo-alertas-etiqueta" aria-haspopup="dialog" onclick="abrirSelectorCargosAlertas()">Seleccionar cargo</button></div>
+
+        <!-- 1. BARRA SUPERIOR: contexto, cargo y acciones -->
+        <header class="alerts-toolbar">
+          <div class="alerts-title">
+            <p class="alerts-eyebrow">Monitoreo de planificación</p>
+            <h2>Dashboard de alertas</h2>
+            <p id="alertas-contexto">Cobertura, descanso y cumplimiento de jornada.</p>
+          </div>
+          <div class="alerts-toolbar-actions">
+            <div class="alert-dash-cargo">
+              <span id="cargo-alertas-etiqueta">Cargo a consultar</span>
+              <button type="button" id="cargo-alertas" aria-describedby="cargo-alertas-etiqueta" aria-haspopup="dialog" onclick="abrirSelectorCargosAlertas()">Seleccionar cargo</button>
+            </div>
+            <button type="button" onclick="mostrarVistaCobertura()" class="alerts-secondary">
+              <svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg>Configurar cobertura
+            </button>
+          </div>
           <span id="alertas-estado" class="alert-dash-status" role="status"></span>
-          <button type="button" onclick="mostrarVistaCobertura()" class="alerts-secondary">
-            <svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg>Configurar cobertura
-          </button></div>
         </header>
-        <section id="alertas-sin-cargo" class="alert-dash-no-scope" role="status"><h3>Selecciona un cargo</h3><p id="alertas-sin-cargo-mensaje">Usa Seleccionar cargo para elegir un único cargo en el mismo modal de Planificación.</p></section>
+
+        <section id="alertas-sin-cargo" class="alert-dash-no-scope" role="status">
+          <h3>Selecciona un cargo</h3>
+          <p id="alertas-sin-cargo-mensaje">Usa Seleccionar cargo para elegir un único cargo en el mismo modal de Planificación.</p>
+        </section>
+
+        <!-- 2. RESUMEN: indicadores por prioridad -->
         <section class="alert-dash-kpis" id="alertas-kpis" aria-label="Indicadores del cargo y período seleccionados" data-cargo-requerido hidden></section>
-        <p class="alert-dash-scope" data-cargo-requerido hidden>Resumen del cargo y período seleccionados. Haz clic en un indicador o gráfico para filtrar el detalle.</p>
+
+        <!-- 3. ANÁLISIS: categorías y distribución semanal -->
         <div class="alert-dash-charts" data-cargo-requerido hidden>
           <section class="alert-dash-panel" aria-labelledby="alertas-categorias-titulo">
-            <header><h3 id="alertas-categorias-titulo">Alertas por categoría</h3><p>Dónde están los ajustes pendientes</p></header>
+            <header class="alert-dash-panel-head">
+              <h3 id="alertas-categorias-titulo">Por categoría</h3>
+              <p>Dónde están los ajustes pendientes</p>
+            </header>
             <div id="alertas-por-categoria" class="alert-dash-categories"></div>
           </section>
           <section class="alert-dash-panel" aria-labelledby="alertas-semanas-titulo">
-            <header><h3 id="alertas-semanas-titulo">Distribución semanal</h3><p>Cada alerta se cuenta en una sola semana</p></header>
-            <div class="alert-dash-legend"><span><i class="alert-dash-segment-danger"></i>Críticas</span><span><i class="alert-dash-segment-warning"></i>Advertencias</span><span><i class="alert-dash-segment-info"></i>Informativas</span></div>
+            <header class="alert-dash-panel-head">
+              <h3 id="alertas-semanas-titulo">Por semana</h3>
+              <p>Cada alerta se cuenta en una sola semana</p>
+            </header>
+            <div class="alert-dash-legend">
+              <span><i class="alert-dash-segment-danger"></i>Críticas</span>
+              <span><i class="alert-dash-segment-warning"></i>Advertencias</span>
+              <span><i class="alert-dash-segment-info"></i>Informativas</span>
+            </div>
             <div id="alertas-por-semana" class="alert-dash-weeks" role="group" aria-label="Alertas por semana y prioridad"></div>
           </section>
         </div>
+
+        <!-- 4. DETALLE: filtros y lista -->
         <section class="alert-dash-panel alert-dash-detail" aria-labelledby="alertas-detalle-titulo" data-cargo-requerido hidden>
-          <header class="alert-dash-detail-header"><div><h3 id="alertas-detalle-titulo">Detalle de alertas</h3><p>Prioridad más alta primero</p></div><span id="badge-alertas-vista" role="status">0 alertas</span></header>
+          <header class="alert-dash-detail-header">
+            <div>
+              <h3 id="alertas-detalle-titulo">Detalle de alertas</h3>
+              <p>Prioridad más alta primero</p>
+            </div>
+            <span id="badge-alertas-vista" role="status">0 alertas</span>
+          </header>
+
           <div class="alert-dash-filters">
-            <label class="alerts-search"><svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
-              <span class="sr-only">Buscar alertas</span><input id="busqueda-alertas" type="search" placeholder="Nombre, fecha o motivo…" oninput="renderizarAlertasVista()"></label>
-            <label><span class="sr-only">Categoría</span><select id="categoria-alertas" onchange="renderizarAlertasVista()"><option value="todos">Todas las categorías</option><option value="cobertura">Cobertura</option><option value="descanso">Descanso</option><option value="horas">Horas semanales</option></select></label>
-            <label><span class="sr-only">Prioridad</span><select id="prioridad-alertas" onchange="renderizarAlertasVista()">
-              <option value="todos">Todas las prioridades</option><option value="danger">Críticas</option><option value="warning">Advertencias</option><option value="info">Informativas</option>
-            </select></label>
-            <label><span class="sr-only">Semana</span><select id="semana-alertas" onchange="renderizarAlertasVista()"><option value="todos">Todas las semanas</option></select></label>
+            <label class="alerts-search">
+              <svg class="alerts-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
+              <span class="sr-only">Buscar alertas</span>
+              <input id="busqueda-alertas" type="search" placeholder="Buscar por nombre, fecha o motivo…" oninput="renderizarAlertasVista()">
+            </label>
             <button type="button" class="alert-dash-reset" onclick="limpiarFiltrosDashboardAlertas()">Limpiar filtros</button>
           </div>
+
+          <div class="alert-dash-chips" role="group" aria-labelledby="chips-prioridad-etiqueta">
+            <span id="chips-prioridad-etiqueta">Prioridad</span>
+            <div id="chips-prioridad" class="alert-dash-chip-row"></div>
+          </div>
+          <div class="alert-dash-chips" role="group" aria-labelledby="chips-semana-etiqueta">
+            <span id="chips-semana-etiqueta">Semana</span>
+            <div id="chips-semana" class="alert-dash-chip-row"></div>
+          </div>
+
+          <div hidden>
+            <select id="categoria-alertas" onchange="renderizarAlertasVista()" aria-hidden="true" tabindex="-1">
+              <option value="todos">Todas</option>
+              <option value="cobertura">Cobertura</option>
+              <option value="descanso">Descanso</option>
+              <option value="horas">Horas semanales</option>
+              <option value="nocturno5x2">Nocturno 5x2</option>
+              <option value="domingos38">Domingos art. 38</option>
+              <option value="domingos38bis">Domingos art. 38 bis</option>
+              <option value="legal">Límites legales</option>
+            </select>
+            <select id="prioridad-alertas" onchange="renderizarAlertasVista()" aria-hidden="true" tabindex="-1">
+              <option value="todos">Todas</option>
+              <option value="danger">Críticas</option>
+              <option value="warning">Advertencias</option>
+              <option value="info">Informativas</option>
+            </select>
+            <select id="semana-alertas" onchange="renderizarAlertasVista()" aria-hidden="true" tabindex="-1"><option value="todos">Todas</option></select>
+          </div>
+
           <div id="contenedor-alertas-vista" class="alert-dash-detail-list"></div>
-          <footer class="alert-dash-pagination"><span id="alertas-rango">0 alertas para mostrar</span><div>
-            <label for="alertas-por-pagina">Por página</label><select id="alertas-por-pagina" onchange="renderizarAlertasVista()"><option>10</option><option>20</option><option>50</option></select>
-            <span id="alertas-pagina">Página 1 de 1</span><button type="button" id="alertas-anterior" onclick="cambiarPaginaDashboardAlertas(-1)" disabled>Anterior</button><button type="button" id="alertas-siguiente" onclick="cambiarPaginaDashboardAlertas(1)" disabled>Siguiente</button>
-          </div></footer>
+
+          <footer class="alert-dash-pagination">
+            <span id="alertas-rango">0 alertas para mostrar</span>
+            <div>
+              <label for="alertas-por-pagina">Por página</label>
+              <select id="alertas-por-pagina" onchange="renderizarAlertasVista()"><option>10</option><option>20</option><option>50</option></select>
+              <span id="alertas-pagina">Página 1 de 1</span>
+              <button type="button" id="alertas-anterior" onclick="cambiarPaginaDashboardAlertas(-1)" disabled>Anterior</button>
+              <button type="button" id="alertas-siguiente" onclick="cambiarPaginaDashboardAlertas(1)" disabled>Siguiente</button>
+            </div>
+          </footer>
         </section>
       </div>
     </main>
@@ -1915,6 +1995,27 @@
             <option value="30">30 Horas</option>
 
             <option value="20">20 Horas</option>
+          </select>
+        </div>
+
+        <!-- CATEGORÍA ART. 38 -->
+        <div class="md:col-span-2">
+          <label for="trabajador-categoria-art38" class="block text-sm font-semibold mb-2 text-slate-700">
+            Categoría art. 38 (Código del Trabajo)
+          </label>
+
+          <select id="trabajador-categoria-art38"
+            class="w-full rounded-2xl border border-slate-300 px-5 py-4 bg-white outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+            <option value="">No aplica (sin exigencia de domingos)</option>
+            <option value="1">1 · Reparaciones por fuerza mayor</option>
+            <option value="2">2 · Explotaciones o servicios que exigen continuidad (mín. 2 domingos libres al mes)</option>
+            <option value="3">3 · Obras que solo se ejecutan en estaciones o períodos determinados</option>
+            <option value="4">4 · Trabajos impostergables para la buena marcha de la empresa</option>
+            <option value="5">5 · A bordo de naves</option>
+            <option value="6">6 · Faenas portuarias</option>
+            <option value="7">7 · Comercio y servicios que atienden directamente al público (mín. 2 domingos libres al mes)</option>
+            <option value="8">8 · Deportistas profesionales y actividades conexas</option>
+            <option value="9">9 · Dependientes de plataformas digitales de servicios</option>
           </select>
         </div>
 

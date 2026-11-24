@@ -303,6 +303,7 @@ function nuevoTrabajador(){
     document.getElementById("trabajador-rut").value = ""
     document.getElementById("trabajador-nombre").value = ""
     document.getElementById("trabajador-jornada").value = "42"
+    document.getElementById("trabajador-categoria-art38").value = ""
 
     fijarCampo("responsable", "")
     fijarCampo("area", "")
@@ -367,6 +368,9 @@ function editarTrabajador(id){
     document.getElementById("trabajador-jornada").value =
         trabajador.jornada || "44"
 
+    document.getElementById("trabajador-categoria-art38").value =
+        trabajador.categoria_art38 ? String(trabajador.categoria_art38) : ""
+
     document.getElementById("trabajador-es-responsable").checked =
         !!trabajador.es_responsable
 
@@ -426,6 +430,10 @@ async function guardarTrabajador(){
             parseInt(
                 document.getElementById("trabajador-jornada").value
             ),
+        categoria_art38:
+            parseInt(
+                document.getElementById("trabajador-categoria-art38").value
+            ) || null,
         es_responsable:
             document.getElementById("trabajador-es-responsable").checked,
         activo:

@@ -13,6 +13,9 @@ window.cargosSeleccionados =
     []
 window.busquedaPlanificacion = window.busquedaPlanificacion || ""
 
+// Colaborador elegido en el filtro. "" = todos los colaboradores.
+window.trabajadorSeleccionado = window.trabajadorSeleccionado || ""
+
 
 // =====================================================
 // CARGA SISTEMA
@@ -85,6 +88,13 @@ function trabajadoresPlanificacionVisibles(){
     const porCargo =
         filtrarPorCargos(trabajadoresGlobal)
 
+    // Filtro por colaborador: se aplica sobre la lista única que se
+    // renderiza para todas las semanas, así que vale para todas.
+    const porTrabajador =
+        window.trabajadorSeleccionado
+            ? porCargo.filter(t => String(t.id) === String(window.trabajadorSeleccionado))
+            : porCargo
+
     const texto =
         normalizarTexto(
             document.getElementById("busqueda-planificacion")?.value ||
@@ -92,10 +102,10 @@ function trabajadoresPlanificacionVisibles(){
         )
 
     if(!texto){
-        return porCargo
+        return porTrabajador
     }
 
-    return porCargo.filter(t => {
+    return porTrabajador.filter(t => {
 
         const turnos =
             planificacionGlobal
@@ -177,7 +187,7 @@ function renderAlertaCard(alerta){
     const prioridad = {danger:["Crítica","error"],warning:["Advertencia","warning"],info:["Informativa","info"]}
     const tipo = prioridad[alerta.tipo] ? alerta.tipo : "warning"
     const [etiqueta,icono] = prioridad[tipo]
-    const categorias = {cobertura:"Cobertura",descanso:"Descanso",horas:"Horas semanales"}
+    const categorias = {cobertura:"Cobertura",descanso:"Descanso",horas:"Horas semanales",nocturno5x2:"Nocturno 5x2",domingos38:"Domingos art. 38",domingos38bis:"Domingos art. 38 bis",legal:"Límites legales"}
     const titulo = alerta.trabajador || alerta.titulo || "Cobertura pendiente"
     const fecha = alerta.kind === "horas" ? `Semana ${alerta.semana}` : alerta.kind === "descanso" ? `${alerta.fecha1} → ${alerta.fecha2}` : alerta.fecha || ""
     let mensaje = alerta.mensaje || "Revisa la cobertura configurada."
@@ -410,6 +420,48 @@ function cargarCargos(){
     }
 
     actualizarEtiquetaCargos()
+
+    cargarTrabajadoresFiltro()
+
+}
+
+// Llena el selector de colaboradores con los activos que pasan el filtro de
+// cargos. Si el colaborador elegido ya no está disponible, vuelve a "Todos".
+function cargarTrabajadoresFiltro(){
+
+    const select =
+        document.getElementById("filtro-trabajador")
+
+    if(!select){ return }
+
+    const disponibles =
+        filtrarPorCargos(trabajadoresGlobal)
+            .filter(t => t.activo !== false)
+            .sort((a, b) =>
+                String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
+            )
+
+    const seleccion = String(window.trabajadorSeleccionado || "")
+
+    if(seleccion && !disponibles.some(t => String(t.id) === seleccion)){
+        window.trabajadorSeleccionado = ""
+    }
+
+    select.innerHTML =
+        `<option value="">Todos los colaboradores</option>` +
+        disponibles.map(t => {
+            const id = String(t.id)
+            return `<option value="${escaparHTML(id)}" ${id === String(window.trabajadorSeleccionado) ? "selected" : ""}>${escaparHTML(t.nombre || "")}</option>`
+        }).join("")
+
+}
+
+// Aplica el colaborador elegido ("" = todos) a la planificación.
+function filtrarPorTrabajador(id){
+
+    window.trabajadorSeleccionado = id || ""
+
+    actualizarVistaPlanificacion()
 
 }
 
@@ -745,12 +797,23 @@ function renderizarTrabajadores(trabajadores){
         : null
     const semanas = generarSemanas(mesActual, anioActual)
     const alertas = calcularTodasAlertas(trabajadores)
+    // Primer domingo del mes visible: la alerta mensual del art. 38 se muestra
+    // en la semana que lo contiene, para no repetirla en cada semana.
+    const primerDomingoMes = (() => {
+        for(let dia = 1; dia <= 31; dia++){
+            const fecha = new Date(anioActual, mesActual, dia)
+            if(fecha.getMonth() !== mesActual) break
+            if(fecha.getDay() === 0) return resumenFechaISO(fecha)
+        }
+        return ""
+    })()
     contenedor.innerHTML = semanas.map((semana, index) => {
         const fechas = Array.from({length:7}, (_, dia) => {
             const fecha = new Date(semana.inicio)
             fecha.setDate(fecha.getDate() + dia)
             return {fecha, iso: resumenFechaISO(fecha), nombre: NOMBRES_DIAS[dia]}
         })
+        const incluyePrimerDomingo = fechas.some(({iso}) => iso === primerDomingoMes)
         return `<section class="planning-week card" aria-label="Semana ${index + 1}">
             <div class="planning-week-header">
                 <h2>Semana ${index + 1}</h2>
@@ -791,12 +854,17 @@ function renderizarTrabajadores(trabajadores){
                                     <div class="schedule-cell-detail">
                                         <span class="turno-duracion">${formatearDuracionTurno(turnos[dia])}</span>
                                         ${renderIconoAlertas(descanso, "Descanso insuficiente entre jornadas (mínimo 12h)", "hotel", `${minimo}h`)}
+                                        ${renderIconoAlertas(alertas.filter(a => a.kind === "nocturno5x2" && a.fecha === iso && String(a.trabajador_id) === String(t.id)), "Nocturno 5x2: el último día no puede cruzar la medianoche", "bedtime", "5x2")}
+                                        ${renderIconoAlertas(alertas.filter(a => a.kind === "legal" && a.regla === "diaria" && a.fecha === iso && String(a.trabajador_id) === String(t.id)), "Más de 10 h netas en el día (art. 28)", "schedule", "10h+")}
                                     </div>
                                 </td>`
                             }).join("")}
                             <td class="schedule-hours">
                                 <div class="columna-horas">${htmlBloqueHoras(horas, t.jornada)}</div>
                                 ${renderIconoAlertas(alertas.filter(a => a.kind === "horas" && a.semana === index + 1 && String(a.trabajador_id) === String(t.id)), "Horas semanales", "schedule")}
+                                ${renderIconoAlertas(alertas.filter(a => a.kind === "legal" && (a.regla === "dias" || a.regla === "semanal") && a.fecha === resumenFechaISO(semana.inicio) && String(a.trabajador_id) === String(t.id)), "Límites legales de la semana (arts. 22 y 28)", "gavel")}
+                                ${incluyePrimerDomingo ? renderIconoAlertas(alertas.filter(a => a.kind === "domingos38" && String(a.trabajador_id) === String(t.id)), "Domingos art. 38: mínimo 2 domingos libres al mes", "event_busy") : ""}
+                                ${incluyePrimerDomingo ? renderIconoAlertas(alertas.filter(a => a.kind === "domingos38bis" && String(a.trabajador_id) === String(t.id)), "Domingos art. 38 bis: mínimo 7 domingos libres al año", "event_repeat") : ""}
                             </td>
                         </tr>`
                     }).join("") || '<tr><td colspan="9" class="schedule-empty">No hay colaboradores para los filtros seleccionados.</td></tr>'}</tbody>

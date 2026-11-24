@@ -26,7 +26,7 @@ function limpiarFocoAlertaPlanificacion(){
 
 function prepararFocoAlertaPlanificacion(trabajador, datos = {}){
     limpiarFocoAlertaPlanificacion()
-    if(!datos || !["descanso", "horas"].includes(datos.alertaKind)) return
+    if(!datos || !["descanso", "horas", "nocturno5x2"].includes(datos.alertaKind)) return
     if(!/^(?:[0-9]|1[01])$/.test(String(datos.mes)) || !/^\d{4}$/.test(String(datos.anio))) return
     const mes = Number(datos.mes), anio = Number(datos.anio)
     if(anio < 1900) return
@@ -44,6 +44,12 @@ function prepararFocoAlertaPlanificacion(trabajador, datos = {}){
         if(!fechas.length) return
         titulo = `${trabajador.nombre} · Descanso entre jornadas`
         mensaje = `${formato(fecha1)} → ${formato(fecha2)}. ${motivo}`
+    }else if(datos.alertaKind === "nocturno5x2"){
+        const fecha = fechaFocoAlertaPlanificacion(datos.fecha1)
+        if(!fecha) return
+        fechas = [fecha]
+        titulo = `${trabajador.nombre} · Nocturno 5x2`
+        mensaje = `${formato(fecha)}. ${motivo}`
     }else{
         if(!/^[1-9]\d*$/.test(String(datos.semana))) return
         const numero = Number(datos.semana)

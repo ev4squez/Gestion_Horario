@@ -3,7 +3,11 @@
 const CATEGORIAS_DASHBOARD_ALERTAS = {
     cobertura: {nombre: "Cobertura", detalle: "Dotación de apertura, cierre y continuidad"},
     descanso: {nombre: "Descanso", detalle: "Separación entre jornadas"},
-    horas: {nombre: "Horas semanales", detalle: "Diferencias con la jornada contratada"}
+    horas: {nombre: "Horas semanales", detalle: "Diferencias con la jornada contratada"},
+    nocturno5x2: {nombre: "Nocturno 5x2", detalle: "Último día de la racha no puede cruzar la medianoche"},
+    domingos38: {nombre: "Domingos art. 38", detalle: "Mínimo de dos domingos libres al mes (categorías 2 y 7)"},
+    domingos38bis: {nombre: "Domingos art. 38 bis", detalle: "Mínimo de siete domingos libres al año (categoría 7)"},
+    legal: {nombre: "Límites legales", detalle: "Días por semana, horas diarias y semanales, colación"}
 }
 const PRIORIDADES_DASHBOARD_ALERTAS = {
     danger: "Críticas", warning: "Advertencias", info: "Informativas"
@@ -54,6 +58,34 @@ function limpiarFiltrosDashboardAlertas(){
 
 function cambiarPaginaDashboardAlertas(delta){
     window.paginaDashboardAlertas = (window.paginaDashboardAlertas || 1) + delta
+    renderizarAlertasVista()
+}
+
+// Chips de prioridad y semana. Son botones que reflejan el <select> oculto
+// correspondiente (que sigue siendo el estado que lee la lógica de filtros).
+function renderizarChipsFiltro(){
+    const grupos = [
+        {contenedor: "chips-prioridad", select: "prioridad-alertas",
+            opciones: [["todos", "Todas"], ["danger", "Críticas"], ["warning", "Advertencias"], ["info", "Informativas"]]},
+        {contenedor: "chips-semana", select: "semana-alertas",
+            opciones: [...document.getElementById("semana-alertas").options].map(o => [o.value, o.textContent])}
+    ]
+    grupos.forEach(grupo => {
+        const destino = document.getElementById(grupo.contenedor)
+        const select = document.getElementById(grupo.select)
+        if(!destino || !select) return
+        destino.innerHTML = grupo.opciones.map(([valor, texto]) => `
+            <button type="button" class="alert-dash-chip" data-valor="${escaparHTML(valor)}"
+                aria-pressed="${select.value === valor}"
+                onclick="elegirFiltroChip('${grupo.select}', '${escaparHTML(valor)}')">${escaparHTML(texto)}</button>`).join("")
+    })
+}
+
+function elegirFiltroChip(selectId, valor){
+    const select = document.getElementById(selectId)
+    if(!select) return
+    select.value = valor
+    window.paginaDashboardAlertas = 1
     renderizarAlertasVista()
 }
 
@@ -118,6 +150,7 @@ function renderizarAlertasVista(){
         (sinFecha ? '<option value="0">Sin fecha</option>' : "")
     selectorSemana.value = [...selectorSemana.options].some(o => o.value === semanaAnterior) ? semanaAnterior : "todos"
     const semana = selectorSemana.value
+    renderizarChipsFiltro()
 
 
     estado.classList.toggle("alert-dash-status-clear", !todas.length)
@@ -131,10 +164,12 @@ function renderizarAlertasVista(){
         </button>`).join("")
 
     const maxCategoria = Math.max(1, ...Object.keys(CATEGORIAS_DASHBOARD_ALERTAS).map(key => todas.filter(a => a.kind === key).length))
+    // Todas las categorías siempre visibles como botones de filtro; las que no
+    // tienen alertas se atenúan (siguen seleccionables).
     document.getElementById("alertas-por-categoria").innerHTML = Object.entries(CATEGORIAS_DASHBOARD_ALERTAS).map(([key, datos]) => {
         const total = todas.filter(a => a.kind === key).length
-        return `<button type="button" class="alert-dash-category" data-categoria-dashboard="${key}" data-total="${total}"
-            aria-pressed="${categoria === key}" onclick="filtrarDashboardAlertas('categoria','${key}')">
+        return `<button type="button" class="alert-dash-category${total === 0 ? " is-empty" : ""}" data-categoria-dashboard="${key}" data-total="${total}"
+            title="${escaparHTML(datos.detalle)}" aria-pressed="${categoria === key}" onclick="filtrarDashboardAlertas('categoria','${key}')">
             <span class="alert-dash-category-label"><span>${datos.nombre}</span><strong>${total}</strong></span>
             <span class="alert-dash-track" aria-hidden="true"><span style="width:${total / maxCategoria * 100}%"></span></span>
             <small>${datos.detalle}</small>

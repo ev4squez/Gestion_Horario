@@ -64,6 +64,7 @@ def crear_tablas():
     _migrar_columna_turno_fijo()
     _migrar_columnas_cobertura()
     _migrar_columna_es_super_admin()
+    _migrar_columna_categoria_art38()
     _migrar_empresa_id_nullable_usuarios()
     _migrar_empresa_y_empresa_id()
     ensure_sqlite_wal_mode()
@@ -321,6 +322,42 @@ def _migrar_columna_cargo():
                     "ADD COLUMN cargo TEXT DEFAULT 'Sin cargo'"
                 )
             )
+
+
+def _migrar_columna_categoria_art38():
+    """Añade la columna categoria_art38 a bases de datos existentes
+    (mismo patrón que cargo: create_all() no altera tablas)."""
+
+    inspector = inspect(engine)
+
+    if "trabajadores" not in inspector.get_table_names():
+        return
+
+    columnas = {c["name"] for c in inspector.get_columns("trabajadores")}
+
+    if "categoria_art38" not in columnas:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE trabajadores "
+                    "ADD COLUMN categoria_art38 INTEGER"
+                )
+            )
+
+
+def _validar_categoria_art38(valor):
+    """Acepta None (no aplica) o una categoría del inciso 1 del art. 38 (1 a 9)."""
+
+    if valor is None:
+        return None
+
+    if valor not in range(1, 10):
+        raise HTTPException(
+            status_code=422,
+            detail="La categoría del art. 38 debe estar entre 1 y 9",
+        )
+
+    return valor
 
 
 def _migrar_columna_es_super_admin():
@@ -826,6 +863,8 @@ class TrabajadorSchema(BaseModel):
 
     jornada: Optional[int] = None
 
+    categoria_art38: Optional[int] = None
+
     responsable: Optional[str] = None
 
     ceco: Optional[str] = None
@@ -880,6 +919,7 @@ def _serializar_trabajador(t: Trabajador) -> dict:
         "nombre": t.nombre,
         "area": t.area,
         "jornada": t.jornada,
+        "categoria_art38": t.categoria_art38,
         "responsable": t.responsable,
         "ceco": t.ceco,
         "cargo": t.cargo or "Sin cargo",
@@ -1069,6 +1109,7 @@ def crear_trabajador(
         nombre=data.nombre.strip(),
         area=(data.area or "").strip(),
         jornada=data.jornada,
+        categoria_art38=_validar_categoria_art38(data.categoria_art38),
         responsable=(data.responsable or "").strip(),
         ceco=(data.ceco or "").strip(),
         cargo=(data.cargo or "").strip() or "Sin cargo",
@@ -1197,6 +1238,7 @@ def actualizar_trabajador(
     trabajador.nombre = data.nombre.strip()
     trabajador.area = (data.area or "").strip()
     trabajador.jornada = data.jornada
+    trabajador.categoria_art38 = _validar_categoria_art38(data.categoria_art38)
     trabajador.responsable = (data.responsable or "").strip()
     trabajador.ceco = (data.ceco or "").strip()
     trabajador.cargo = (data.cargo or "").strip() or "Sin cargo"

@@ -71,6 +71,10 @@ class Trabajador(Base):
     area = Column(String)
     jornada = Column(Integer)
 
+    # Categoría del art. 38 del Código del Trabajo (1 a 9), o NULL si no aplica.
+    # Las categorías 2 y 7 exigen al menos 2 domingos de descanso al mes.
+    categoria_art38 = Column(Integer, nullable=True)
+
     responsable = Column(String)
     ceco = Column(String)
 
